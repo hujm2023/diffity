@@ -21,6 +21,7 @@ macOS 13.3 or later, Apple Silicon and Intel. The AI features need [Claude Code]
 | [Let Claude fix your comments](#let-claude-fix-your-comments) | Claude works through your comments, edits the code and replies in each thread |
 | [Ask @claude](#ask-claude) | Mention @claude in any thread and Claude replies right there |
 | [Get a Claude review](#get-a-claude-review) | Claude reads the diff and leaves comments on the lines it cares about |
+| [Review over SSH](#review-over-ssh) | Open a remote working tree, switch worktrees and browse changes without cloning locally |
 | [Review any commit or range](#review-any-commit-or-range) | Uncommitted changes, a commit, a range or a whole branch |
 | [Review pull requests](#review-pull-requests) | Check out a GitHub PR, review it locally, post the review back |
 | [Post reviews to GitHub](#post-reviews-to-github) | Submit as Comment, Approve or Request changes, with GitHub threads synced into the diff |
@@ -52,6 +53,38 @@ macOS 13.3 or later, Apple Silicon and Intel. The AI features need [Claude Code]
 > Click **Ask Claude to review**, optionally add what to focus on, and its comments land on the diff as it works.
 
 <img src="./.github/screenshots/claude-review.gif" alt="Asking Claude to review and its comments appearing on the diff" />
+
+### Review over SSH
+
+This fork adds read-only SSH review. Build and run this branch from source with the usual Rust/Tauri development prerequisites:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm tauri dev
+```
+
+Choose **Open via SSH** on the start screen, enter an SSH host alias (or `user@hostname`) and an absolute repository path (or `~/project`). You can also enter `ssh://devbox/home/user/project` in the **⌘O / Ctrl+O** picker.
+
+The app uses your system OpenSSH, SSH config and agent/keys. Establish a working terminal connection first, including accepting the host key and unlocking your key. Custom ports and jump hosts can be configured in `~/.ssh/config`. The remote must be a POSIX host with Git and Python 3 available in its noninteractive shell; no server installation or forwarded port is needed.
+
+The status bar provides a **Remote worktree** selector and **Refresh** button. Worktrees are discovered through `git worktree list --porcelain -z`, so `.worktree/` or `.worktrees/` being ignored by the parent repository does not hide registered worktrees. Each selected worktree has its own status, diff and file tree. Refresh (or **⌘R / Ctrl+R**) reads the latest remote state.
+
+<img src="./.github/screenshots/ssh-remote.png" alt="SSH read-only review of changes in an ignored nested Git worktree" />
+
+SSH review includes staged/unstaged/untracked changes, commit and branch comparisons, text/file previews and images. File browsing and untracked files respect Git's ignore rules. This first version shows all Git changes without applying `.diffityignore`; remote ignore settings, comments, Viewed tracking, Claude and Git mutations are disabled. Local repository features continue to use the existing backend.
+
+Remote text previews are limited to 2 MiB, image reads to 16 MiB, and Git output/diffs to 32 MiB. Reads time out explicitly instead of displaying a failed connection as an empty diff. A comparison reads several Git/file sources and is not an atomic snapshot if another process edits the worktree during the read; refresh once the edits finish.
+
+For development, the remote helper tests use only disposable repositories:
+
+```sh
+pnpm typecheck
+pnpm exec vitest run tests/remote-repo.test.ts
+python3 -B -m unittest discover -s tests -p ssh_helper_test.py -v
+cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --test ssh_transport
+```
+
+The Rust transport test also supports an opt-in SSH fixture via `DIFFITY_SSH_TEST_REPO=ssh://host/path`; use a disposable repository with two worktrees, a modified `tracked.txt` containing `changed`, and an untracked file. Unconfigured runs skip that real-network test. Desktop release builds still use the upstream update feed; fork release signing/update distribution is outside this branch's scope.
 
 ### Review any commit or range
 

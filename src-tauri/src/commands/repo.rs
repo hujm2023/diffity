@@ -49,7 +49,7 @@ pub async fn recent_repos(state: State<'_, AppState>) -> Result<Vec<RecentRepo>,
     let repos = state.store.recent_repos(30)?;
     Ok(repos
         .into_iter()
-        .filter(|r| PathBuf::from(&r.path).is_dir())
+        .filter(|r| crate::ssh::is_remote(&r.path) || PathBuf::from(&r.path).is_dir())
         .collect())
 }
 
@@ -129,6 +129,7 @@ pub async fn open_in_editor(
     line: Option<u32>,
     editor: Option<String>,
 ) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     let editor = match editor.filter(|e| !e.trim().is_empty()) {
         Some(e) => Some(e),
         None => state.store.get_setting("editor")?,

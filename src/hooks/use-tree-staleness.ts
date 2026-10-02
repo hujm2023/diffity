@@ -1,3 +1,5 @@
+import { isRemoteRepo } from '../lib/remote-repo';
+import { getRepoPath } from '../lib/api';
 import { useEffect, useRef, useState } from 'react';
 import { fetchTreeFingerprint } from '../lib/api';
 import { useRepoChange } from './use-repo';
@@ -15,6 +17,7 @@ export function useTreeStaleness() {
   }
 
   useEffect(() => {
+    if (isRemoteRepo(getRepoPath())) return;
     let cancelled = false;
     fetchTreeFingerprint().then((fingerprint) => {
       if (!cancelled) {
@@ -27,7 +30,7 @@ export function useTreeStaleness() {
   }, [generation]);
 
   useEffect(() => {
-    if (tick === 0) {
+    if (isRemoteRepo(getRepoPath()) || tick === 0) {
       return;
     }
     let cancelled = false;

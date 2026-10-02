@@ -45,6 +45,7 @@ pub async fn github_logout(state: State<'_, AppState>) -> Result<(), AppError> {
 
 #[tauri::command]
 pub async fn git_fetch(app: AppHandle, state: State<'_, AppState>, repo_path: String) -> Result<GitOpResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.git_fetch(&repo_path).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(result)
@@ -52,6 +53,7 @@ pub async fn git_fetch(app: AppHandle, state: State<'_, AppState>, repo_path: St
 
 #[tauri::command]
 pub async fn git_pull(app: AppHandle, state: State<'_, AppState>, repo_path: String) -> Result<GitOpResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.git_pull(&repo_path).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(result)
@@ -59,6 +61,7 @@ pub async fn git_pull(app: AppHandle, state: State<'_, AppState>, repo_path: Str
 
 #[tauri::command]
 pub async fn git_push(app: AppHandle, state: State<'_, AppState>, repo_path: String) -> Result<GitOpResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.git_push(&repo_path).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(result)
@@ -66,6 +69,7 @@ pub async fn git_push(app: AppHandle, state: State<'_, AppState>, repo_path: Str
 
 #[tauri::command]
 pub async fn git_commit_all(app: AppHandle, state: State<'_, AppState>, repo_path: String, message: String) -> Result<GitOpResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.git_commit_all(&repo_path, &message).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(result)
@@ -95,6 +99,7 @@ pub async fn checkout_pr(
     repo_path: String,
     url_or_number: String,
 ) -> Result<PullRequest, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let pr = state.github.checkout_pr(&repo_path, url_or_number).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(pr)
@@ -108,6 +113,7 @@ pub async fn git_stash_push(
     repo_path: String,
     message: String,
 ) -> Result<StashResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.stash_push(&repo_path, &message).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(result)
@@ -121,6 +127,7 @@ pub async fn git_stash_restore(
     repo_path: String,
     sha: String,
 ) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.stash_restore(&repo_path, &sha).await;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     result
@@ -134,6 +141,7 @@ pub async fn git_checkout(
     repo_path: String,
     target: String,
 ) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     state.github.checkout(&repo_path, &target).await?;
     let _ = app.emit("repo-changed", json!({ "repoPath": repo_path }));
     Ok(())
@@ -153,6 +161,7 @@ pub async fn push_review(
     review_id: Option<String>,
     pending_action: Option<GithubPendingAction>,
 ) -> Result<PushResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let review = match &review_id {
         Some(id) => Some(state.store.get_review(id)?),
         None => None,
@@ -182,6 +191,7 @@ pub async fn pull_review(
     session_id: String,
     pr_number: u64,
 ) -> Result<PullResult, AppError> {
+    super::ssh::require_local(&repo_path)?;
     let result = state.github.pull_review(&repo_path, &session_id, pr_number).await;
     emit_repo_threads_changed(&app, &state, &repo_path);
     result

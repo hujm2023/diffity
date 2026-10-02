@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as tauri from '../lib/tauri';
 import { fetchCommits, fetchGitHubDetails, getRepoPath, parseGitHubRemote } from '../lib/api';
 import type { Branch } from '../lib/types';
+import { isRemoteRepo } from '../lib/remote-repo';
 
 export function useGitStatus() {
   return useQuery({
@@ -22,7 +23,7 @@ export function useRepoMeta() {
 
 export function useHasGitHubRemote(): boolean {
   const { data } = useRepoMeta();
-  return parseGitHubRemote(data?.remoteUrl ?? null) !== null;
+  return !isRemoteRepo(getRepoPath()) && parseGitHubRemote(data?.remoteUrl ?? null) !== null;
 }
 
 export function useGitHubAuth() {

@@ -13,6 +13,8 @@ import { CopyIcon, EditorIcon, GitPullRequestIcon, RevealIcon, TerminalIcon } fr
 import { ContextMenu, MenuItem, MenuSeparator } from '../ui/popover';
 import { useEditorName } from '../../hooks/use-editor-name';
 import { errorMessage, openInEditor } from '../../lib/api';
+import { isRemoteRepo } from '../../lib/remote-repo';
+import { RemoteControls } from '../../features/remote/remote-controls';
 import { Skeleton, useRevealClass } from '../ui/skeleton';
 
 interface StatusBarProps {
@@ -124,14 +126,15 @@ export function StatusBar(props: StatusBarProps) {
         </span>
       ) : (
         <span className={cn('flex items-center gap-1.5 min-w-0', reveal)}>
-          <BranchSwitcher branch={branch} className={`${itemClass} text-text-secondary`} />
-          <span className={itemClass}>
+          {isRemoteRepo(nav.repoPath) ? <span className={itemClass}>{branch ?? 'detached'}</span> : <BranchSwitcher branch={branch} className={`${itemClass} text-text-secondary`} />}
+          {!isRemoteRepo(nav.repoPath) && <span className={itemClass}>
             <Tracking />
-          </span>
+          </span>}
           <GitSyncActions />
         </span>
       )}
       {stale && <StaleNotice onRefresh={stale.onRefresh} message={stale.message} />}
+      <RemoteControls />
       <span className="flex-1" />
       {details && diffRef !== prDiffRef(details) && (
         <button
@@ -145,7 +148,7 @@ export function StatusBar(props: StatusBarProps) {
           </span>
         </button>
       )}
-      <RepoPathButton label={path} path={fullPath} />
+      {isRemoteRepo(nav.repoPath) ? <span className="hidden lg:block truncate max-w-[240px] text-[11px] font-mono" title={fullPath}>{path}</span> : <RepoPathButton label={path} path={fullPath} />}
     </div>
   );
 }

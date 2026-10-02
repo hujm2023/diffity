@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { isRemoteRepo, parseRemoteRepo, remoteRepoPath, readOnlyError, type RemoteWorktree } from './remote-repo';
 import type {
   AgentAction,
   AgentEvent,
@@ -64,18 +65,35 @@ export function errorMessage(error: unknown): string {
 }
 
 // repo
-export const openRepo = (path: string) => invoke<RepoInfo>('open_repo', { path });
-export const repoRemoteUrl = (path: string) => invoke<string | null>('repo_remote_url', { path });
+function repoRead<T>(operation: string, repoPath: string, args: Record<string, unknown> = {}): Promise<T> {
+  return isRemoteRepo(repoPath)
+    ? invoke<T>('ssh_request', { repoPath, operation, args })
+    : invoke<T>(operation, { repoPath, ...args });
+}
+
+function localOperation<T>(operation: string, repoPath: string, args: Record<string, unknown> = {}): Promise<T> {
+  return isRemoteRepo(repoPath) ? Promise.reject(readOnlyError()) : invoke<T>(operation, { repoPath, ...args });
+}
+
+export const openRepo = (path: string) => invoke<RepoInfo>(isRemoteRepo(path) ? 'open_ssh_repo' : 'open_repo', { path });
+export const repoRemoteUrl = (path: string) => isRemoteRepo(path)
+  ? repoRead<string | null>('repo_remote_url', path) : invoke<string | null>('repo_remote_url', { path });
+export async function listWorktrees(repoPath: string): Promise<RemoteWorktree[]> {
+  const target = parseRemoteRepo(repoPath);
+  if (!target) return [];
+  const entries = await repoRead<RemoteWorktree[]>('list_worktrees', repoPath);
+  return entries.map((entry) => ({ ...entry, path: remoteRepoPath(target.host, entry.path) }));
+}
 export const recentRepos = () => invoke<RecentRepo[]>('recent_repos');
-export const watchRepo = (repoPath: string) => invoke<void>('watch_repo', { repoPath });
-export const unwatchRepo = (repoPath: string) => invoke<void>('unwatch_repo', { repoPath });
+export const watchRepo = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve() : invoke<void>('watch_repo', { repoPath });
+export const unwatchRepo = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve() : invoke<void>('unwatch_repo', { repoPath });
 export const listCommits = (repoPath: string, count: number, skip: number, search?: string | null) =>
-  invoke<Commit[]>('list_commits', { repoPath, count, skip, search: search ?? null });
-export const listBranches = (repoPath: string) => invoke<Branch[]>('list_branches', { repoPath });
-export const gitStatus = (repoPath: string) => invoke<GitStatus>('git_status', { repoPath });
-export const repoOverview = (repoPath: string) => invoke<OverviewFile[]>('repo_overview', { repoPath });
+  repoRead<Commit[]>('list_commits', repoPath, { count, skip, search: search ?? null });
+export const listBranches = (repoPath: string) => repoRead<Branch[]>('list_branches', repoPath);
+export const gitStatus = (repoPath: string) => repoRead<GitStatus>('git_status', repoPath);
+export const repoOverview = (repoPath: string) => repoRead<OverviewFile[]>('repo_overview', repoPath);
 export const openInEditor = (repoPath: string, path: string, line?: number | null, editor?: string | null) =>
-  invoke<void>('open_in_editor', { repoPath, path, line: line ?? null, editor: editor ?? null });
+  localOperation<void>('open_in_editor', repoPath, { path, line: line ?? null, editor: editor ?? null });
 export const reportIssue = () => invoke<void>('report_issue');
 export const takeOpenRequests = () => invoke<OpenRequest[]>('take_open_requests');
 export const projectData = () => invoke<ProjectData[]>('project_data');
@@ -85,30 +103,30 @@ export const getSetting = (key: string) => invoke<string | null>('get_setting', 
 export const setSetting = (key: string, value: string) => invoke<void>('set_setting', { key, value });
 
 // diff
-export const resolveRef = (repoPath: string, ref: string) => invoke<ResolvedRef>('resolve_ref', { repoPath, ref });
+export const resolveRef = (repoPath: string, ref: string) => repoRead<ResolvedRef>('resolve_ref', repoPath, { ref });
 export const getDiff = (repoPath: string, ref: string, ignoreWhitespace: boolean, showIgnored = false) =>
-  invoke<DiffResult>('get_diff', { repoPath, ref, ignoreWhitespace, showIgnored });
-export const getDiffIgnoreRules = (repoPath: string) => invoke<string>('get_diff_ignore_rules', { repoPath });
-export const setDiffIgnoreRules = (repoPath: string, rules: string) => invoke<void>('set_diff_ignore_rules', { repoPath, rules });
+  repoRead<DiffResult>('get_diff', repoPath, { ref, ignoreWhitespace, showIgnored });
+export const getDiffIgnoreRules = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve('') : invoke<string>('get_diff_ignore_rules', { repoPath });
+export const setDiffIgnoreRules = (repoPath: string, rules: string) => localOperation<void>('set_diff_ignore_rules', repoPath, { rules });
 export const getFilePatch = (repoPath: string, ref: string, path: string, oldPath: string | null, ignoreWhitespace: boolean) =>
-  invoke<string>('get_file_patch', { repoPath, ref, path, oldPath, ignoreWhitespace });
+  repoRead<string>('get_file_patch', repoPath, { ref, path, oldPath, ignoreWhitespace });
 export const getFileVersions = (repoPath: string, ref: string, path: string, oldPath?: string | null) =>
-  invoke<FileVersions>('get_file_versions', { repoPath, ref, path, oldPath: oldPath ?? null });
+  repoRead<FileVersions>('get_file_versions', repoPath, { ref, path, oldPath: oldPath ?? null });
 export const diffFingerprint = (repoPath: string, ref: string, showIgnored = false) =>
-  invoke<string>('diff_fingerprint', { repoPath, ref, showIgnored });
-export const revertFile = (repoPath: string, path: string) => invoke<void>('revert_file', { repoPath, path });
-export const revertHunk = (repoPath: string, patch: string) => invoke<void>('revert_hunk', { repoPath, patch });
+  repoRead<string>('diff_fingerprint', repoPath, { ref, showIgnored });
+export const revertFile = (repoPath: string, path: string) => localOperation<void>('revert_file', repoPath, { path });
+export const revertHunk = (repoPath: string, patch: string) => localOperation<void>('revert_hunk', repoPath, { patch });
 
 // files
-export const listTree = (repoPath: string) => invoke<TreeEntry[]>('list_tree', { repoPath });
-export const readFile = (repoPath: string, path: string) => invoke<FileContent>('read_file', { repoPath, path });
+export const listTree = (repoPath: string) => repoRead<TreeEntry[]>('list_tree', repoPath);
+export const readFile = (repoPath: string, path: string) => repoRead<FileContent>('read_file', repoPath, { path });
 export const readFileBase64 = (repoPath: string, path: string) =>
-  invoke<string>('read_file_base64', { repoPath, path });
+  repoRead<string>('read_file_base64', repoPath, { path });
 
 // comments
 export const getSession = (repoPath: string, ref: string) => invoke<ReviewSession>('get_session', { repoPath, ref });
 export const listThreads = (sessionId: string) => invoke<Thread[]>('list_threads', { sessionId });
-export const listRepoThreads = (repoPath: string) => invoke<RepoThread[]>('list_repo_threads', { repoPath });
+export const listRepoThreads = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve([] as RepoThread[]) : invoke<RepoThread[]>('list_repo_threads', { repoPath });
 export const createThread = (input: NewThread) => invoke<Thread>('create_thread', { input });
 export const addReply = (
   threadId: string,
@@ -146,7 +164,7 @@ export const viewedChanges = (sessionId: string, filePath: string) => invoke<str
 // agents
 export const listAgents = (refresh?: boolean) => invoke<AgentInfo[]>('list_agents', { refresh: refresh ?? null });
 export const agentModels = (refresh = false) => invoke<ModelCatalog | null>('agent_models', { refresh });
-export const startChat = (input: StartChat) => invoke<Chat>('start_chat', { input });
+export const startChat = (input: StartChat) => isRemoteRepo(input.repoPath) ? Promise.reject(readOnlyError()) : invoke<Chat>('start_chat', { input });
 export const listChats = (repoPath: string, ref?: string) => invoke<Chat[]>('list_chats', { repoPath, ref: ref ?? null });
 export const getChatMessages = (chatId: string) => invoke<ChatMessage[]>('get_chat_messages', { chatId });
 export function sendPrompt(
@@ -174,19 +192,19 @@ export const githubDeviceStart = () => invoke<DeviceCode>('github_device_start')
 export const githubDevicePoll = (deviceCode: string) =>
   invoke<GithubAuthStatus>('github_device_poll', { deviceCode });
 export const githubLogout = () => invoke<void>('github_logout');
-export const gitFetch = (repoPath: string) => invoke<GitOpResult>('git_fetch', { repoPath });
-export const gitPull = (repoPath: string) => invoke<GitOpResult>('git_pull', { repoPath });
-export const gitPush = (repoPath: string) => invoke<GitOpResult>('git_push', { repoPath });
-export const gitCommitAll = (repoPath: string, message: string) => invoke<GitOpResult>('git_commit_all', { repoPath, message });
+export const gitFetch = (repoPath: string) => localOperation<GitOpResult>('git_fetch', repoPath);
+export const gitPull = (repoPath: string) => localOperation<GitOpResult>('git_pull', repoPath);
+export const gitPush = (repoPath: string) => localOperation<GitOpResult>('git_push', repoPath);
+export const gitCommitAll = (repoPath: string, message: string) => localOperation<GitOpResult>('git_commit_all', repoPath, { message });
 export const githubPostComment = (commentId: string) => invoke<Thread>('github_post_comment', { commentId });
-export const findPr = (repoPath: string) => invoke<PullRequest | null>('find_pr', { repoPath });
-export const listPrs = (repoPath: string) => invoke<PullRequest[]>('list_prs', { repoPath });
+export const findPr = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve(null) : invoke<PullRequest | null>('find_pr', { repoPath });
+export const listPrs = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve([] as PullRequest[]) : invoke<PullRequest[]>('list_prs', { repoPath });
 export const checkoutPr = (repoPath: string, urlOrNumber: string) =>
-  invoke<PullRequest>('checkout_pr', { repoPath, urlOrNumber });
+  localOperation<PullRequest>('checkout_pr', repoPath, { urlOrNumber });
 export const gitStashPush = (repoPath: string, message: string) =>
-  invoke<StashResult>('git_stash_push', { repoPath, message });
-export const gitStashRestore = (repoPath: string, sha: string) => invoke<void>('git_stash_restore', { repoPath, sha });
-export const gitCheckout = (repoPath: string, target: string) => invoke<void>('git_checkout', { repoPath, target });
+  localOperation<StashResult>('git_stash_push', repoPath, { message });
+export const gitStashRestore = (repoPath: string, sha: string) => localOperation<void>('git_stash_restore', repoPath, { sha });
+export const gitCheckout = (repoPath: string, target: string) => localOperation<void>('git_checkout', repoPath, { target });
 export const pushReview = (
   repoPath: string,
   sessionId: string,

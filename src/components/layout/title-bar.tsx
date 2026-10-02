@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useEffect, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { isMac, isTauri, modKey } from '../../lib/platform';
@@ -135,6 +136,7 @@ function RepoCrumb(props: { name: string; path?: string }) {
         <MenuSeparator />
         <MenuItem
           icon={<EditorIcon size="sm" />}
+          disabled={isRemoteRepo(nav.repoPath)}
           label={`Open in ${editor}`}
           onSelect={run(() => {
             openInEditor('').catch((error) => toast.error('Could not open the editor', { description: errorMessage(error) }));
@@ -142,6 +144,7 @@ function RepoCrumb(props: { name: string; path?: string }) {
         />
         <MenuItem
           icon={<RevealIcon size="sm" />}
+          disabled={isRemoteRepo(nav.repoPath)}
           label="Reveal in Finder"
           onSelect={run(() => {
             revealItemInDir(path ?? nav.repoPath).catch(() => undefined);

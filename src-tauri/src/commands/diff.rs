@@ -33,6 +33,7 @@ pub async fn get_diff_ignore_rules(repo_path: String) -> Result<String, AppError
 
 #[tauri::command]
 pub async fn set_diff_ignore_rules(repo_path: String, rules: String) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     blocking(move || diffignore::write_local_rules(Path::new(&repo_path), &rules)).await
 }
 
@@ -68,10 +69,12 @@ pub async fn diff_fingerprint(
 
 #[tauri::command]
 pub async fn revert_file(repo_path: String, path: String) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     blocking(move || diff::revert_file(Path::new(&repo_path), &path)).await
 }
 
 #[tauri::command]
 pub async fn revert_hunk(repo_path: String, patch: String) -> Result<(), AppError> {
+    super::ssh::require_local(&repo_path)?;
     blocking(move || diff::revert_hunk(Path::new(&repo_path), &patch)).await
 }

@@ -26,6 +26,7 @@ pub async fn agent_models(
 
 #[tauri::command]
 pub async fn start_chat(state: State<'_, AppState>, input: StartChat) -> Result<Chat, AppError> {
+    super::ssh::require_local(&input.repo_path)?;
     state.agents.start_chat(input).await
 }
 

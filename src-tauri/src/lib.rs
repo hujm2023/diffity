@@ -7,6 +7,7 @@ pub mod agents;
 mod cli_install;
 mod commands;
 pub mod core;
+pub mod ssh;
 mod env_fix;
 pub mod github;
 mod open_link;
@@ -170,6 +171,8 @@ pub fn run() {
             let _ = webview;
         })
         .invoke_handler(tauri::generate_handler![
+            commands::ssh::open_ssh_repo,
+            commands::ssh::ssh_request,
             commands::repo::open_repo,
             commands::repo::quick_open_roots,
             commands::repo::list_dir_suggestions,

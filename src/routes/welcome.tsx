@@ -22,6 +22,7 @@ import { cn } from '../lib/cn';
 import { buttonIcon, buttonPrimary, inputField } from '../components/ui/button-styles';
 import { CloneIcon, FolderOpenIcon, GitHubIcon, GitPullRequestIcon, MoonIcon, SettingsIcon, SunIcon, XIcon } from '../components/ui/icon';
 import { Spinner } from '../components/icons/spinner';
+import { SshOpenForm } from '../features/welcome/ssh-open-form';
 
 dayjs.extend(relativeTime);
 
@@ -64,7 +65,7 @@ export function WelcomePage() {
   const { theme, toggleTheme } = useTheme();
   const recent = useRecentRepos();
   const [dragging, setDragging] = useState(false);
-  const [mode, setMode] = useState<'clone' | 'pr' | null>(null);
+  const [mode, setMode] = useState<'clone' | 'pr' | 'ssh' | null>(null);
 
   useEffect(() => {
     setRepoPath(null);
@@ -99,7 +100,9 @@ export function WelcomePage() {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-3">
+          <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StartCard icon={<FolderOpenIcon className="w-[18px] h-[18px]" />} title="Open via SSH"
+              detail="A remote Git repository" active={mode === 'ssh'} onClick={() => setMode(mode === 'ssh' ? null : 'ssh')} />
             <StartCard
               icon={<FolderOpenIcon className="w-[18px] h-[18px]" />}
               title="Open folder"
@@ -121,6 +124,7 @@ export function WelcomePage() {
               onClick={() => setMode(mode === 'pr' ? null : 'pr')}
             />
           </div>
+          {mode === 'ssh' && <div className="mt-3"><SshOpenForm onOpen={(path) => openRepo(path)} /></div>}
           {mode === 'clone' && (
             <div className="mt-3">
               <CloneForm onCloned={(path) => void openRepo(path)} />

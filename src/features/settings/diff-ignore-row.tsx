@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -32,6 +33,9 @@ export function DiffIgnoreRow() {
     setDraft(withoutFinalNewline(rules.data));
   }, [rules.data]);
 
+  if (repoPath && isRemoteRepo(repoPath)) {
+    return <PreferencesRow label="Hide these files from diffs" hint="SSH review shows all Git changes. Remote ignore settings cannot be edited in this version." />;
+  }
   if (!repoPath) {
     return (
       <PreferencesRow label="Hide these files from diffs" hint="Open a repository to set the files it hides from diffs." />

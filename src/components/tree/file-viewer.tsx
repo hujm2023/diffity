@@ -216,10 +216,10 @@ export function FileViewer(props: FileViewerProps) {
           lineNumber={lineNum}
           isSelected={highlightType === 'focus' || highlightType === 'selected'}
           className={highlightType === 'base' ? 'bg-diff-comment-gutter/40' : undefined}
-          onMouseDown={() => handleLineMouseDown(lineNum, 'new')}
-          onMouseEnter={() => handleLineMouseEnter(lineNum, 'new')}
+          onMouseDown={sessionId ? () => handleLineMouseDown(lineNum, 'new') : undefined}
+          onMouseEnter={sessionId ? () => handleLineMouseEnter(lineNum, 'new') : undefined}
           onCommentClick={() => handleCommentClick(lineNum)}
-          showCommentButton={true}
+          showCommentButton={!!sessionId}
         />
         <td
           data-find-line={lineNum}
@@ -262,7 +262,7 @@ export function FileViewer(props: FileViewerProps) {
       }
     }
 
-    if (pendingSelection && lineNum === pendingSelection.endLine) {
+    if (sessionId && pendingSelection && lineNum === pendingSelection.endLine) {
       const lineLabel = pendingSelection.startLine === pendingSelection.endLine
         ? `Line ${pendingSelection.startLine}`
         : `Lines ${pendingSelection.startLine}–${pendingSelection.endLine}`;

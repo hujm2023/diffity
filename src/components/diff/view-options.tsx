@@ -15,7 +15,7 @@ interface DiffBarProps {
   hideWhitespace: boolean;
   onHideWhitespaceChange: (hide: boolean) => void;
   fileCount: number;
-  viewedCount: number;
+  viewedCount?: number;
   /** Files marked viewed that changed since. */
   changedSinceViewedCount?: number;
   /** Files `.diffityignore` hides, and whether they are temporarily shown. */
@@ -90,7 +90,7 @@ export function DiffBar(props: DiffBarProps) {
 
   return (
     <div className="flex items-center gap-2 h-10 shrink-0 px-5 border-b border-border-muted bg-bg">
-      <ViewedProgress viewed={viewedCount} total={fileCount} changed={changedSinceViewedCount} />
+      {viewedCount !== undefined && <ViewedProgress viewed={viewedCount} total={fileCount} changed={changedSinceViewedCount} />}
       {commentNav}
       <span className="flex-1" />
       {ignored && <IgnoredFilesChip {...ignored} />}

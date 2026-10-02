@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useInfo } from '../../hooks/use-info';
 import { useTheme } from '../../hooks/use-theme';
@@ -23,7 +24,7 @@ import { hideStaticSplash } from './skeleton';
 import { Breadcrumb, CurrentCrumb, TitleBar, Workspace } from './title-bar';
 import { OptionsMenu } from './options-menu';
 import { StatusBar } from './status-bar';
-import { commitRef, errorMessage, openInEditor } from '../../lib/api';
+import { commitRef, errorMessage, openInEditor, getRepoPath } from '../../lib/api';
 import { prDiffRef } from './ref-menu';
 import { useRepoNav } from '../../hooks/use-repo';
 import { isOpenThread, useRepoThreads } from '../../hooks/use-repo-threads';
@@ -245,6 +246,7 @@ function Hero(props: { item: Candidate; onReview: (ref: string) => void; classNa
         <button onClick={() => (item.run ? item.run() : onReview(item.ref))} className={buttonPrimary}>
           {item.action}
         </button>
+        {!isRemoteRepo(getRepoPath()) && <>
         <button ref={askRef} onClick={() => setAsking(!asking)} className={buttonClaude} aria-expanded={asking}>
           <SparkleIcon size="sm" />
           Ask Claude to review
@@ -257,6 +259,7 @@ function Hero(props: { item: Candidate; onReview: (ref: string) => void; classNa
           sessionId={null}
           onStarted={() => onReview(item.ref)}
         />
+        </>}
         {item.summary && <span className="ml-auto"><StatLine summary={item.summary} /></span>}
         {!item.summary && item.summaryLoading && <Skeleton className="ml-auto w-36 h-3" />}
       </div>
@@ -501,7 +504,7 @@ export function Dashboard(props: DashboardProps) {
         </div>
         <div data-tauri-drag-region className="flex-1 min-w-2 self-stretch" />
         <div className="flex items-center gap-2 shrink-0">
-          <CommentsButton />
+          {!isRemoteRepo(getRepoPath()) && <CommentsButton />}
           <OptionsMenu theme={theme} onToggleTheme={toggleTheme} />
         </div>
       </TitleBar>
@@ -511,7 +514,7 @@ export function Dashboard(props: DashboardProps) {
           <div className="max-w-[1000px] mx-auto px-8 pt-7 pb-12">
             <header className="flex items-center gap-3">
               <h1 className="text-[18px] leading-6 font-semibold text-text truncate">{info?.name ?? 'Repository'}</h1>
-              {branch && (
+              {branch && !isRemoteRepo(getRepoPath()) && (
                 <BranchSwitcher branch={branch} className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs text-text-secondary" />
               )}
               <span className="flex-1" />
@@ -520,6 +523,7 @@ export function Dashboard(props: DashboardProps) {
                 Browse files
               </button>
               <button
+                disabled={isRemoteRepo(getRepoPath())}
                 onClick={() => {
                   openInEditor('').catch((error) => toast.error('Could not open the editor', { description: errorMessage(error) }));
                 }}
@@ -580,7 +584,7 @@ export function Dashboard(props: DashboardProps) {
                           tooltip={item.action}
                           actions={[
                             { label: item.action, icon: item.icon, onSelect: () => (item.run ? item.run() : onNavigate(item.ref)) },
-                            { label: 'Ask Claude to review', icon: <SparkleIcon size="sm" className="text-claude" />, onSelect: () => askClaudeFor(item.ref) },
+                            ...(!isRemoteRepo(getRepoPath()) ? [{ label: 'Ask Claude to review', icon: <SparkleIcon size="sm" className="text-claude" />, onSelect: () => askClaudeFor(item.ref) }] : []),
                           ]}
                         />
                       ))}

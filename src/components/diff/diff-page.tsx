@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import type { DiffFile } from '@/lib/diff-parser';
@@ -475,7 +476,7 @@ export function DiffPage(props: DiffPageProps) {
     if (ownPr && githubDetails) {
       list.push({ id: 'commit-push', title: `Commit & push to PR #${githubDetails.prNumber}`, group: 'Actions', icon: <PushIcon size="sm" />, run: () => openCommitDialog(githubDetails.prNumber) });
     }
-    return list;
+    return isRemoteRepo(getRepoPath()) ? list.filter((item) => !item.id.startsWith('claude-')) : list;
   }, [hideWhitespace, diff, navigateFile, refParam, ownPr, githubDetails, activeFile]);
 
   useEffect(() => {
@@ -628,7 +629,7 @@ export function DiffPage(props: DiffPageProps) {
               hideWhitespace={hideWhitespace}
               onHideWhitespaceChange={setHideWhitespace}
               fileCount={diff.files.length}
-              viewedCount={allPaths.filter((path) => reviewedFiles.has(path)).length}
+              viewedCount={sessionId ? allPaths.filter((path) => reviewedFiles.has(path)).length : undefined}
               changedSinceViewedCount={changedFiles.size}
               ignored={{ hiddenCount: diff.hiddenFiles?.length ?? 0, showing: showIgnored, onShowingChange: setShowIgnored }}
               onExpandAll={() => setCollapsedFiles(new Set())}

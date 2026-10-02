@@ -682,7 +682,7 @@ function FileCard(props: FileCardProps) {
               ))}
             </div>
           </div>
-          <label className="flex items-center gap-1.5 h-6 px-1.5 -mr-1.5 rounded-md text-xs text-text-secondary cursor-pointer select-none hover:text-text hover:bg-hover transition-colors">
+          {commentsEnabled && <label className="flex items-center gap-1.5 h-6 px-1.5 -mr-1.5 rounded-md text-xs text-text-secondary cursor-pointer select-none hover:text-text hover:bg-hover transition-colors">
             <input
               type="checkbox"
               checked={reviewed}
@@ -690,7 +690,7 @@ function FileCard(props: FileCardProps) {
               className="accent-accent cursor-pointer w-3.5 h-3.5"
             />
             Viewed
-          </label>
+          </label>}
         </div>
       </div>
       {!collapsed && (

@@ -58,7 +58,7 @@ export function PathComments(props: PathCommentsProps) {
       <div className="flex items-center gap-1 min-h-8 text-[13px]">
         {children}
         <div className="flex-1" />
-        <button
+        {sessionId && <button
           onClick={handleToggle}
           className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-text-secondary hover:text-text hover:bg-hover transition-colors cursor-pointer"
           title={`Comment on ${label}`}
@@ -69,11 +69,11 @@ export function PathComments(props: PathCommentsProps) {
               ? `${threads.length} comment${threads.length !== 1 ? 's' : ''}`
               : 'Add comment'}
           </span>
-        </button>
+        </button>}
         {actions}
       </div>
 
-      {isExpanded && (
+      {sessionId && isExpanded && (
         <div className={`mt-3 rounded-lg overflow-hidden ${threads.length > 0 ? 'bg-bg-secondary' : 'bg-bg-secondary'}`}>
           <div className="flex items-center gap-2 px-3 py-2 text-sm">
             <CommentIcon className="w-3.5 h-3.5 text-text-muted" />

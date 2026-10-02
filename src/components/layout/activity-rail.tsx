@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -492,13 +493,14 @@ function ProjectMenuItems(props: {
       <MenuItem icon={<FolderOpenIcon size="sm" />} label="Open" disabled={current} onSelect={run(() => onOpen(false))} />
       <MenuItem icon={<ExternalLinkIcon size="sm" />} label="Open in new window" hint={`${modKey}-click`} onSelect={run(() => onOpen(true))} />
       <MenuSeparator />
-      <MenuItem icon={<RevealIcon size="sm" />} label="Reveal in Finder" onSelect={run(() => { revealItemInDir(path).catch(() => undefined); })} />
+      <MenuItem icon={<RevealIcon size="sm" />} label="Reveal in Finder" disabled={isRemoteRepo(path)} onSelect={run(() => { revealItemInDir(path).catch(() => undefined); })} />
       <MenuItem
         icon={<EditorIcon size="sm" />}
+        disabled={isRemoteRepo(path)}
         label={`Open in ${editor}`}
         onSelect={run(() => { tauri.openInEditor(path, '').catch((error) => toast.error('Could not open the editor', { description: tauri.errorMessage(error) })); })}
       />
-      <MenuItem icon={<TerminalIcon size="sm" />} label="Open in Terminal" onSelect={run(() => { openPath(path, 'Terminal').catch(() => undefined); })} />
+      <MenuItem icon={<TerminalIcon size="sm" />} label="Open in Terminal" disabled={isRemoteRepo(path)} onSelect={run(() => { openPath(path, 'Terminal').catch(() => undefined); })} />
       <MenuItem icon={<CopyIcon size="sm" />} label="Copy path" onSelect={run(() => { void navigator.clipboard.writeText(path); toast.success('Path copied'); })} />
       <MenuSeparator />
       <MenuItem icon={<ArrowUpIcon size="sm" />} label="Move up" disabled={index <= 0} onSelect={run(() => onMove(-1))} />

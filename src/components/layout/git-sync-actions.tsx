@@ -4,6 +4,7 @@ import { useGitHubPr, useGitStatus, useOwnPr, useRepoMeta } from '../../hooks/us
 import { toast } from 'sonner';
 import * as tauri from '../../lib/tauri';
 import { getRepoPath } from '../../lib/api';
+import { isRemoteRepo } from '../../lib/remote-repo';
 import type { GitOpResult } from '../../lib/types';
 import { Spinner } from '../icons/spinner';
 import { cn } from '../../lib/cn';
@@ -39,7 +40,7 @@ export function GitSyncActions() {
   const { details } = useGitHubPr();
   const ownPr = useOwnPr();
 
-  if (!status?.branch || !meta?.remoteUrl) {
+  if (isRemoteRepo(getRepoPath()) || !status?.branch || !meta?.remoteUrl) {
     return null;
   }
 

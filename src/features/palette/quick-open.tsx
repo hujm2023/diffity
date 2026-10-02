@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -234,6 +235,10 @@ function QuickOpenBody() {
       return list;
     }
 
+    if (isRemoteRepo(input.trim())) {
+      list.push({ key: 'ssh', icon: <GitBranchIcon size="sm" />, title: <>Open remote <span className="font-mono text-xs">{input.trim()}</span></>, run: () => { closeQuickOpen(); void openRepoAt(input.trim(), navigate); } });
+      return list;
+    }
     if (prUrl) {
       list.push({ key: 'pr', icon: <GitPullRequestIcon size="sm" className="text-added" />, title: `Open pull request #${prUrl.number} of ${prUrl.owner}/${prUrl.repo}`, detail: <span className="text-[11px] text-text-muted">uses your local clone, or clones it</span>, run: () => void openPr(input) });
       return list;
@@ -371,7 +376,7 @@ function QuickOpenBody() {
                 row?.run();
               }
             }}
-            placeholder={clone ? 'Folder to clone into, e.g. ~/Code/' : 'Type a path (~/…), a project name, or a GitHub URL'}
+            placeholder={clone ? 'Folder to clone into, e.g. ~/Code/' : 'Type a path, ssh://host/path, a project name, or a GitHub URL'}
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}

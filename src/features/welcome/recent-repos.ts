@@ -1,3 +1,4 @@
+import { isRemoteRepo } from '../../lib/remote-repo';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { NavigateFunction } from 'react-router';
 import { toast } from 'sonner';
@@ -99,6 +100,6 @@ export async function openRepoAt(path: string, navigate: NavigateFunction, optio
     navigate(repoRoute(info.path, options?.extra, options?.page), { state: { fresh: true } });
   } catch (error) {
     endOpening();
-    toast.error('Could not open the folder', { description: `${tauri.errorMessage(error)}. It may have been moved or deleted.` });
+    toast.error(isRemoteRepo(path) ? 'Could not open the SSH repository' : 'Could not open the folder', { description: isRemoteRepo(path) ? tauri.errorMessage(error) : `${tauri.errorMessage(error)}. It may have been moved or deleted.` });
   }
 }
