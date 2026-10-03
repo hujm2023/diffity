@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::core::store::Store;
+use serde_json::json;
 use crate::core::types::{
     AuthorType, DiffResult, NewThread, Review, ReviewSession, Side, Thread, ThreadStatus,
 };
@@ -33,14 +34,17 @@ impl ReviewBackend for CoreBackend {
 
     fn get_or_create_session(&self, repo_path: &str, r#ref: &str) -> BoxFut<'_, ReviewSession> {
         let (store, repo, r) = (self.store.clone(), repo_path.to_string(), r#ref.to_string());
-        Box::pin(blocking(move || store.get_or_create_session(&repo, &r)))
+        Box::pin(session_for(store, repo, r))
     }
 
     fn diff(&self, repo_path: &str, r#ref: &str) -> BoxFut<'_, DiffResult> {
         let (repo, r) = (repo_path.to_string(), r#ref.to_string());
-        Box::pin(blocking(move || {
-            crate::core::diff_for_session(&repo, &r, false)
-        }))
+        Box::pin(async move {
+            if crate::ssh::is_remote(&repo) {
+                return Ok(serde_json::from_value(crate::ssh::request(&repo, "get_diff", json!({"ref": r})).await?)?);
+            }
+            blocking(move || crate::core::diff_for_session(&repo, &r, false)).await
+        })
     }
 
     fn side_line_count(
@@ -57,9 +61,18 @@ impl ReviewBackend for CoreBackend {
             path.to_string(),
             old_path.map(String::from),
         );
-        Box::pin(blocking(move || {
-            crate::core::diff::side_line_count(Path::new(&repo), &r, &p, o.as_deref(), side)
-        }))
+        Box::pin(async move {
+            if crate::ssh::is_remote(&repo) {
+                let contents = if r == crate::core::types::TREE_REF {
+                    crate::ssh::request(&repo, "read_file", json!({"path": p})).await?["contents"].clone()
+                } else {
+                    let versions = crate::ssh::request(&repo, "get_file_versions", json!({"ref": r, "path": p, "oldPath": o})).await?;
+                    versions[if side == Side::Old { "oldContents" } else { "newContents" }].clone()
+                };
+                return Ok(contents.as_str().map(|text| text.lines().count() as u32));
+            }
+            blocking(move || crate::core::diff::side_line_count(Path::new(&repo), &r, &p, o.as_deref(), side)).await
+        })
     }
 
     fn list_threads(
@@ -138,4 +151,17 @@ impl ReviewBackend for CoreBackend {
             )
         }))
     }
+}
+
+/// Remote sessions keep the same branch-scoping contract while their comments remain in the desktop store.
+pub async fn session_for(store: Arc<Store>, repo: String, r: String) -> Result<ReviewSession> {
+    if !crate::ssh::is_remote(&repo) { return blocking(move || store.get_or_create_session(&repo, &r)).await; }
+    let scope = remote_scope(&repo, &r).await?;
+    blocking(move || store.get_or_create_scoped_session(&repo, &r, &scope)).await
+}
+
+pub async fn remote_scope(repo: &str, r: &str) -> Result<String> {
+    if !crate::core::store::is_branch_relative(r) { return Ok(String::new()); }
+    let info = crate::ssh::request(repo, "open_repo", serde_json::Value::Null).await?;
+    Ok(info["branch"].as_str().map(String::from).or_else(|| info["headSha"].as_str().map(|sha| format!("detached@{sha}"))).unwrap_or_default())
 }

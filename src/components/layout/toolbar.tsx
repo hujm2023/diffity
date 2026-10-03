@@ -1,5 +1,4 @@
-import { isRemoteRepo } from '../../lib/remote-repo';
-import { useRepoPath } from '../../hooks/use-repo';
+import { AgentPicker } from '../../features/agents/agent-picker';
 import type { ParsedDiff } from '@/lib/diff-parser';
 import { getFilePath } from '../../lib/diff-utils';
 import { OptionsMenu } from './options-menu';
@@ -115,7 +114,6 @@ export function Toolbar(props: ToolbarProps) {
     sessionId,
   } = props;
   const { data: meta } = useRepoMeta();
-  const remote = isRemoteRepo(useRepoPath());
   const hasChanges = !diff || diff.files.length > 0;
 
 
@@ -128,9 +126,10 @@ export function Toolbar(props: ToolbarProps) {
       </div>
       <div data-tauri-drag-region className="flex-1 min-w-2 self-stretch" />
       <div className="flex items-center gap-2 shrink-0">
-        {!remote && <CommentsButton />}
+        <AgentPicker />
+        <CommentsButton />
         <OwnPrAction diffRef={diffRef ?? null} />
-        {!remote && (hasChanges || threads.length > 0) && (
+        {(hasChanges || threads.length > 0) && (
           <>
             <ClaudeToolbar diffRef={diffRef ?? null} sessionId={sessionId ?? null} hasChanges={hasChanges} focusedFile={props.focusedFile ?? null} />
             <FinishReview githubDetails={props.githubDetails ?? null} threads={threads} diffRef={diffRef ?? null} />

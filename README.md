@@ -21,6 +21,7 @@ macOS 13.3 or later, Apple Silicon and Intel. The AI features need [Claude Code]
 | [Let Claude fix your comments](#let-claude-fix-your-comments) | Claude works through your comments, edits the code and replies in each thread |
 | [Ask @claude](#ask-claude) | Mention @claude in any thread and Claude replies right there |
 | [Get a Claude review](#get-a-claude-review) | Claude reads the diff and leaves comments on the lines it cares about |
+| [Choose a review agent](#choose-a-review-agent) | Review with Claude Code or Pi; SSH projects run the agent on the remote host |
 | [Review over SSH](#review-over-ssh) | Open a remote working tree, switch worktrees and browse changes without cloning locally |
 | [Review any commit or range](#review-any-commit-or-range) | Uncommitted changes, a commit, a range or a whole branch |
 | [Review pull requests](#review-pull-requests) | Check out a GitHub PR, review it locally, post the review back |
@@ -54,6 +55,20 @@ macOS 13.3 or later, Apple Silicon and Intel. The AI features need [Claude Code]
 
 <img src="./.github/screenshots/claude-review.gif" alt="Asking Claude to review and its comments appearing on the diff" />
 
+### Choose a review agent
+
+Use the agent picker beside **Ask Claude / Ask Pi** to select Claude Code or Pi. The selection is remembered for each project, including its SSH host. The picker shows where the process runs and lets you set a binary path or re-detect it on that machine.
+
+Pi requires **Pi 0.99.2 or newer** and Node.js; Diffity uses Pi's native RPC and MCP registration through its bundled adapter. It uses Pi's existing provider, model and login configuration. Pi supports read-only review, inline/general findings and comment replies in this version. Mention **@pi** or **@claude** to choose one explicitly, or **@agent** to use the selected agent. Local Claude Code retains its existing code-fix features.
+
+For an SSH project, both Pi and Claude Code are detected and started **on the selected SSH host**, with the selected worktree as their working directory. Model/provider credentials stay on that host; the desktop's credentials and model choices are not copied there. Remote Claude needs its CLI plus `claude-agent-acp` or Node.js/npx for the existing pinned adapter. Node.js is also needed on the desktop for protocol transport.
+
+<img src="./.github/screenshots/ssh-agents.png" alt="Pi selected for read-only review of an SSH worktree" />
+
+The desktop keeps review comments, chats and Viewed markers locally. Agent and MCP packets travel through SSH stdio; the scoped review MCP endpoint runs on the desktop and is exposed through a private temporary Unix socket on the SSH host. No extra TCP listener or port forwarding is used. Remote support files and child processes are removed when the chat closes. Failed SSH launches do not fall back to a local agent.
+
+Pi and all SSH agent sessions are read-only for code: they can generate and reply to review comments, but cannot fix files or run shell commands through this integration. Pi's read tools stay within the selected project and exclude `.git`, `.secrets`, and `.env` paths. Remote agents cannot delegate file or terminal operations to the desktop. This is a bounded review tool configuration, not an operating-system sandbox.
+
 ### Review over SSH
 
 This fork adds read-only SSH review. Build and run this branch from source with the usual Rust/Tauri development prerequisites:
@@ -71,7 +86,7 @@ The status bar provides a **Remote worktree** selector and **Refresh** button. W
 
 <img src="./.github/screenshots/ssh-remote.png" alt="SSH read-only review of changes in an ignored nested Git worktree" />
 
-SSH review includes staged/unstaged/untracked changes, commit and branch comparisons, text/file previews and images. File browsing and untracked files respect Git's ignore rules. This first version shows all Git changes without applying `.diffityignore`; remote ignore settings, comments, Viewed tracking, Claude and Git mutations are disabled. Local repository features continue to use the existing backend.
+SSH review includes staged/unstaged/untracked changes, commit and branch comparisons, text/file previews and images. File browsing and untracked files respect Git's ignore rules. SSH review shows all Git changes without applying `.diffityignore`; remote ignore editing, code fixes and Git mutations are disabled. Comments and agent replies are saved locally, and Viewed tracking stores local content hashes without writing Git objects on the remote. Local repository features continue to use the existing backend.
 
 Remote text previews are limited to 2 MiB, image reads to 16 MiB, and Git output/diffs to 32 MiB. Reads time out explicitly instead of displaying a failed connection as an empty diff. A comparison reads several Git/file sources and is not an atomic snapshot if another process edits the worktree during the read; refresh once the edits finish.
 
@@ -82,6 +97,13 @@ pnpm typecheck
 pnpm exec vitest run tests/remote-repo.test.ts
 python3 -B -m unittest discover -s tests -p ssh_helper_test.py -v
 cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --test ssh_transport
+```
+
+The agent integration harness uses disposable worktrees, a temporary loopback SSH service, real Pi, scoped MCP tools and a local simulated model. It checks local and remote comments/replies, remote model configuration, code/Git immutability, project read boundaries and process/support-file cleanup; a deterministic ACP fixture also verifies remote Claude transport and rejection of desktop file delegation. It uses no real provider credentials or external model API:
+
+```sh
+# Requires Pi 0.99.2+, Node.js, Cargo, an OpenSSH server, and existing noninteractive sudo access.
+python3 -B scripts/test-pi-review.py --sudo
 ```
 
 The Rust transport test also supports an opt-in SSH fixture via `DIFFITY_SSH_TEST_REPO=ssh://host/path`; use a disposable repository with two worktrees, a modified `tracked.txt` containing `changed`, and an untracked file. Unconfigured runs skip that real-network test. Desktop release builds still use the upstream update feed; fork release signing/update distribution is outside this branch's scope.

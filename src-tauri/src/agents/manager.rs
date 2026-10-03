@@ -42,6 +42,7 @@ struct DetectCache {
 pub struct AgentManager {
     store: Arc<Store>,
     mcp_binary: PathBuf,
+    support_dir: PathBuf,
     backend: Arc<dyn ReviewBackend>,
     bridge: Arc<McpBridge>,
     broker: Arc<PermissionBroker>,
@@ -69,6 +70,7 @@ impl AgentManager {
         Self {
             store,
             mcp_binary,
+            support_dir: data_dir.join("agent-support"),
             backend,
             bridge,
             broker: Arc::new(PermissionBroker::default()),
@@ -137,6 +139,22 @@ impl AgentManager {
             .collect())
     }
 
+    async fn detected_for(&self, repo_path: &str, refresh: bool) -> Result<Vec<DetectedAgent>> {
+        if !crate::ssh::is_remote(repo_path) { return Ok(self.detected_agents(refresh).await); }
+        let target = crate::ssh::Target::parse(repo_path)?;
+        let mut custom = HashMap::new();
+        for kind in AgentKind::ENABLED {
+            if let Some(value) = self.store.get_setting(&format!("{}@{}", kind.path_setting_key(), target.host))? {
+                if !value.trim().is_empty() { custom.insert(kind.id().to_string(), value); }
+            }
+        }
+        crate::agents::support::detect_remote(repo_path, &custom).await
+    }
+
+    pub async fn list_agents_for(&self, repo_path: Option<&str>, refresh: bool) -> Result<Vec<AgentInfo>> {
+        Ok(self.detected_for(repo_path.unwrap_or(""), refresh).await?.into_iter().map(|agent| agent.info).collect())
+    }
+
     /// The models Claude Code offers. Read from a throwaway agent session once, then kept in the
     /// settings store; `refresh` asks the agent again (new releases, a Claude Code update).
     pub async fn model_catalog(&self, refresh: bool) -> Result<Option<ModelCatalog>> {
@@ -190,6 +208,9 @@ impl AgentManager {
                 input.agent_id
             )));
         };
+        if (kind == AgentKind::Pi || crate::ssh::is_remote(&input.repo_path)) && crate::agents::policy::can_write_files(input.mode) {
+            return Err(AppError::new("read_only", "Pi and SSH agents support read-only reviews and comment replies in this version"));
+        }
         let title = input
             .title
             .filter(|t| !t.trim().is_empty())
@@ -354,7 +375,7 @@ impl AgentManager {
                 rec.chat.agent_id
             )));
         };
-        let agents = self.detected_agents(false).await;
+        let agents = self.detected_for(&rec.chat.repo_path, false).await?;
         let detected = agents.into_iter().find(|a| a.kind == kind);
         let Some(detected) = detected else {
             return Err(AppError::new(
@@ -362,7 +383,7 @@ impl AgentManager {
                 format!("{} is not installed", kind.display_name()),
             ));
         };
-        let Some(launch) = detected.launch.clone() else {
+        let Some(mut launch) = detected.launch.clone() else {
             let note = detected.info.note.unwrap_or_else(|| "not installed".into());
             return Err(AppError::new(
                 "agent_not_installed",
@@ -381,6 +402,13 @@ impl AgentManager {
                 "agent_failed",
                 format!("diffity-mcp not found at {}", self.mcp_binary.display()),
             ));
+        }
+        let support_dir = crate::agents::support::prepare(&self.support_dir)?;
+        if crate::ssh::is_remote(&rec.chat.repo_path) {
+            let binary = PathBuf::from(detected.info.binary_path.as_deref().ok_or_else(|| AppError::internal("Missing remote agent binary"))?);
+            launch = crate::agents::support::remote(&support_dir, &rec.chat.repo_path, kind, launch, &binary, &self.mcp_binary)?;
+        } else if kind == AgentKind::Pi {
+            launch = crate::agents::support::local_pi(&support_dir, &launch.command)?;
         }
         self.bridge.ensure_started().await?;
 
@@ -441,7 +469,11 @@ impl AgentManager {
         let (store, id) = (self.store.clone(), chat_id.to_string());
         let rec = blocking(move || chats::get(&store, &id)).await?;
         let kind = AgentKind::from_id(&rec.chat.agent_id);
-        if action.needs_write_mode() && !crate::agents::policy::can_write_files(rec.chat.mode) {
+        let readonly = kind == Some(AgentKind::Pi) || crate::ssh::is_remote(&rec.chat.repo_path);
+        if readonly && matches!(&action, AgentAction::Resolve { .. } | AgentAction::ReviewFeedback { .. }) {
+            return Err(AppError::new("read_only", "This agent supports reviews and replies, not code fixes"));
+        }
+        if action.needs_write_mode() && !crate::agents::policy::can_write_files(rec.chat.mode) && !(readonly && matches!(&action, AgentAction::Thread { .. })) {
             return Err(AppError::invalid(
                 "this action edits code; start the chat in `resolve` mode",
             ));
@@ -464,7 +496,7 @@ impl AgentManager {
 
         let (store, id) = (self.store.clone(), chat_id.to_string());
         let first_turn = blocking(move || chats::count_messages(&store, &id)).await? == 0;
-        let prompt = prompts::build_prompt(
+        let mut prompt = prompts::build_prompt(
             rec.chat.mode,
             &action,
             &session_ref,
@@ -473,6 +505,9 @@ impl AgentManager {
             &context,
             review.as_ref(),
         );
+        if readonly {
+            prompt.push_str("\n\nThis execution is read-only. Read code and leave or reply to review comments using the Diffity tools. Do not modify files, execute shell commands, resolve findings by claiming code changes, or install software.");
+        }
         if prompt.trim().is_empty() {
             return Err(AppError::invalid("prompt is empty"));
         }

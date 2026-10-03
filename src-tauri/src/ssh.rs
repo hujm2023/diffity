@@ -26,6 +26,7 @@ const READS: &[&str] = &[
     "diff_fingerprint",
     "list_commits",
     "list_branches",
+    "detect_agents",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

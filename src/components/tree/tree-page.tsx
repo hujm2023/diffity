@@ -1,3 +1,4 @@
+import { AgentPicker } from '../../features/agents/agent-picker';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import {
@@ -410,6 +411,7 @@ export function TreePage() {
         </div>
         <div data-tauri-drag-region className='flex-1 min-w-2 self-stretch' />
         <div className='flex items-center gap-2 shrink-0'>
+          <AgentPicker />
           <CommentToolbarActions
             threads={threads}
             onScrollToThread={handleScrollToThread}

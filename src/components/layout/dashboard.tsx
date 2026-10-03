@@ -1,3 +1,5 @@
+import { AgentPicker } from '../../features/agents/agent-picker';
+import { agentName, useSelectedAgent } from '../../features/agents/selection';
 import { isRemoteRepo } from '../../lib/remote-repo';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useInfo } from '../../hooks/use-info';
@@ -231,6 +233,8 @@ interface Candidate {
 
 function Hero(props: { item: Candidate; onReview: (ref: string) => void; className?: string }) {
   const { item, onReview, className } = props;
+  const chosen = useSelectedAgent(getRepoPath());
+  const name = agentName(chosen);
   const [asking, setAsking] = useState(false);
   const askRef = useRef<HTMLButtonElement>(null);
 
@@ -246,10 +250,10 @@ function Hero(props: { item: Candidate; onReview: (ref: string) => void; classNa
         <button onClick={() => (item.run ? item.run() : onReview(item.ref))} className={buttonPrimary}>
           {item.action}
         </button>
-        {!isRemoteRepo(getRepoPath()) && <>
+        <>
         <button ref={askRef} onClick={() => setAsking(!asking)} className={buttonClaude} aria-expanded={asking}>
           <SparkleIcon size="sm" />
-          Ask Claude to review
+          Ask {name} to review
         </button>
         <AskClaudePopover
           open={asking}
@@ -259,7 +263,7 @@ function Hero(props: { item: Candidate; onReview: (ref: string) => void; classNa
           sessionId={null}
           onStarted={() => onReview(item.ref)}
         />
-        </>}
+        </>
         {item.summary && <span className="ml-auto"><StatLine summary={item.summary} /></span>}
         {!item.summary && item.summaryLoading && <Skeleton className="ml-auto w-36 h-3" />}
       </div>
@@ -504,7 +508,8 @@ export function Dashboard(props: DashboardProps) {
         </div>
         <div data-tauri-drag-region className="flex-1 min-w-2 self-stretch" />
         <div className="flex items-center gap-2 shrink-0">
-          {!isRemoteRepo(getRepoPath()) && <CommentsButton />}
+          <AgentPicker />
+          <CommentsButton />
           <OptionsMenu theme={theme} onToggleTheme={toggleTheme} />
         </div>
       </TitleBar>

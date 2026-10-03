@@ -16,13 +16,13 @@ pub enum AgentKind {
     Claude,
     Codex,
     Gemini,
+    Pi,
 }
 
 impl AgentKind {
-    pub const ALL: [AgentKind; 3] = [AgentKind::Claude, AgentKind::Codex, AgentKind::Gemini];
-    /// Agents exposed to the app. Only Claude Code is supported for now; Codex/Gemini launch code is
-    /// kept intact — add them back here to re-enable.
-    pub const ENABLED: [AgentKind; 1] = [AgentKind::Claude];
+    pub const ALL: [AgentKind; 4] = [AgentKind::Claude, AgentKind::Codex, AgentKind::Gemini, AgentKind::Pi];
+    /// Codex/Gemini launch code is retained, but only Claude and Pi are exposed.
+    pub const ENABLED: [AgentKind; 2] = [AgentKind::Claude, AgentKind::Pi];
 
     pub fn is_enabled(self) -> bool {
         Self::ENABLED.contains(&self)
@@ -38,6 +38,7 @@ impl AgentKind {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
             "gemini" => Some(Self::Gemini),
+            "pi" => Some(Self::Pi),
             _ => None,
         }
     }
@@ -47,6 +48,7 @@ impl AgentKind {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
+            Self::Pi => "pi",
         }
     }
 
@@ -55,6 +57,7 @@ impl AgentKind {
             Self::Claude => "Claude Code",
             Self::Codex => "Codex",
             Self::Gemini => "Gemini",
+            Self::Pi => "Pi",
         }
     }
 
@@ -63,6 +66,7 @@ impl AgentKind {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
+            Self::Pi => "pi",
         }
     }
 
@@ -70,7 +74,7 @@ impl AgentKind {
         match self {
             Self::Claude => Some(("claude-agent-acp", CLAUDE_ACP_PACKAGE)),
             Self::Codex => Some(("codex-acp", CODEX_ACP_PACKAGE)),
-            Self::Gemini => None,
+            Self::Gemini | Self::Pi => None,
         }
     }
 }
@@ -156,6 +160,17 @@ async fn gemini_acp_flag(bin: &Path) -> &'static str {
         }
         _ => "--acp",
     }
+}
+
+async fn pi_launch(cli: &Path) -> Result<LaunchSpec, String> {
+    if find_in_path("node").is_none() { return Err("Pi review needs Node.js on PATH".into()); }
+    let output = probe(cli, &["--version"]).await.ok_or("Could not read Pi's version")?;
+    let version: Vec<u32> = output.stdout.trim().trim_start_matches('v').split('.').take(3).map(|part| part.parse().unwrap_or(0)).collect();
+    if !output.success || version.as_slice() < [0, 99, 2].as_slice() {
+        return Err("Diffity review needs Pi 0.99.2 or newer with native MCP registration".into());
+    }
+    // AgentManager replaces this CLI spec with the bundled ACP review adapter.
+    Ok(LaunchSpec { command: cli.to_path_buf(), args: vec![], env: vec![] })
 }
 
 pub fn adapter_launch(kind: AgentKind, npx: Option<&Path>) -> Result<LaunchSpec, String> {
@@ -246,11 +261,12 @@ pub async fn detect_with(kind: AgentKind, custom_path: Option<&str>) -> Detected
             spec
         }),
         AgentKind::Claude => adapter_launch(kind, find_in_path("npx").as_deref()),
+        AgentKind::Pi => pi_launch(&cli).await,
     };
     info.authenticated = match kind {
         AgentKind::Claude => claude_authenticated(&cli).await,
         AgentKind::Codex => codex_authenticated(&cli).await,
-        AgentKind::Gemini => None,
+        AgentKind::Gemini | AgentKind::Pi => None,
     };
 
     let launch = match launch {
@@ -315,6 +331,7 @@ async fn detect_custom(kind: AgentKind, custom: PathBuf) -> DetectedAgent {
                 spec.env.push(("CODEX_PATH".into(), display.clone()));
                 spec
             }),
+            AgentKind::Pi => pi_launch(&custom).await,
             AgentKind::Claude => adapter_launch(kind, find_in_path("npx").as_deref()).map(|mut spec| {
                 spec.env
                     .push(("CLAUDE_CODE_EXECUTABLE".into(), display.clone()));
@@ -391,8 +408,9 @@ mod tests {
     }
 
     #[test]
-    fn only_claude_enabled() {
+    fn claude_and_pi_enabled() {
         assert!(AgentKind::Claude.is_enabled());
+        assert!(AgentKind::Pi.is_enabled());
         assert!(!AgentKind::Codex.is_enabled());
         assert!(!AgentKind::Gemini.is_enabled());
         assert_eq!(AgentKind::Claude.path_setting_key(), "agent.claude.path");

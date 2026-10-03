@@ -31,6 +31,10 @@ required-features = ["cli"]
 name = "bridge_round_trip"
 required-features = ["app", "mcp"]
 
+[[test]]
+name = "pi_review"
+required-features = ["app", "mcp"]
+
 [features]
 default = ["app"]
 # The Tauri app. scripts/prepare-mcp.mjs builds the sidecar with `--no-default-features

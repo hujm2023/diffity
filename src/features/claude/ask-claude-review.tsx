@@ -1,3 +1,4 @@
+import { agentName, reviewOnlyAgent, useSelectedAgent } from '../agents/selection';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { create } from 'zustand';
@@ -82,6 +83,9 @@ interface AskClaudePanelProps {
 function AskClaudePanel(props: AskClaudePanelProps) {
   const { diffRef, sessionId, focusedFile, onStarted, onClose } = props;
   const repoPath = getRepoPath();
+  const chosen = useSelectedAgent(repoPath);
+  const name = agentName(chosen);
+  const readonly = reviewOnlyAgent(repoPath, chosen);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState<string[]>(() => readFocus(repoPath));
   const [scope, setScope] = useState<Scope>('all');
@@ -126,7 +130,7 @@ function AskClaudePanel(props: AskClaudePanelProps) {
         instructions: text.trim() || undefined,
         paths: paths.length > 0 ? paths : undefined,
       },
-      { repoPath, sessionId: session, model },
+      { repoPath, sessionId: session, model: readonly ? {} : model, agentId: chosen },
     );
     onClose();
     onStarted?.();
@@ -166,10 +170,10 @@ function AskClaudePanel(props: AskClaudePanelProps) {
     >
       <div className="flex items-center gap-2">
         <SparkleIcon size="md" className="text-claude" />
-        <h3 className="text-[13px] font-semibold text-text">Ask Claude to review</h3>
+        <h3 className="text-[13px] font-semibold text-text">Ask {name} to review</h3>
       </div>
       <div>
-        <label className="block mb-1.5 text-xs font-medium text-text-secondary" htmlFor="claude-instructions">What should Claude focus on?</label>
+        <label className="block mb-1.5 text-xs font-medium text-text-secondary" htmlFor="claude-instructions">What should {name} focus on?</label>
         <textarea
           id="claude-instructions"
           ref={textRef}
@@ -224,7 +228,7 @@ function AskClaudePanel(props: AskClaudePanelProps) {
         )}
       </div>
       <div className="flex items-center gap-2 pt-1">
-        <ModelPicker value={model} onChange={setPickedModel} className="-ml-1.5 mr-auto" />
+        {!readonly && <ModelPicker value={model} onChange={setPickedModel} className="-ml-1.5 mr-auto" />}
         <button type="button" onClick={onClose} className={buttonGhost}>
           Cancel
         </button>

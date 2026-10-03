@@ -126,7 +126,7 @@ export const readFileBase64 = (repoPath: string, path: string) =>
 // comments
 export const getSession = (repoPath: string, ref: string) => invoke<ReviewSession>('get_session', { repoPath, ref });
 export const listThreads = (sessionId: string) => invoke<Thread[]>('list_threads', { sessionId });
-export const listRepoThreads = (repoPath: string) => isRemoteRepo(repoPath) ? Promise.resolve([] as RepoThread[]) : invoke<RepoThread[]>('list_repo_threads', { repoPath });
+export const listRepoThreads = (repoPath: string) => invoke<RepoThread[]>('list_repo_threads', { repoPath });
 export const createThread = (input: NewThread) => invoke<Thread>('create_thread', { input });
 export const addReply = (
   threadId: string,
@@ -162,9 +162,9 @@ export const setViewed = (sessionId: string, filePath: string, contentHash: stri
 export const viewedChanges = (sessionId: string, filePath: string) => invoke<string>('viewed_changes', { sessionId, filePath });
 
 // agents
-export const listAgents = (refresh?: boolean) => invoke<AgentInfo[]>('list_agents', { refresh: refresh ?? null });
+export const listAgents = (refresh?: boolean, repoPath?: string) => invoke<AgentInfo[]>('list_agents', { refresh: refresh ?? null, repoPath: repoPath ?? null });
 export const agentModels = (refresh = false) => invoke<ModelCatalog | null>('agent_models', { refresh });
-export const startChat = (input: StartChat) => isRemoteRepo(input.repoPath) ? Promise.reject(readOnlyError()) : invoke<Chat>('start_chat', { input });
+export const startChat = (input: StartChat) => (isRemoteRepo(input.repoPath) || input.agentId === 'pi') && (input.mode === 'resolve' || input.mode === 'edit') ? Promise.reject(readOnlyError()) : invoke<Chat>('start_chat', { input });
 export const listChats = (repoPath: string, ref?: string) => invoke<Chat[]>('list_chats', { repoPath, ref: ref ?? null });
 export const getChatMessages = (chatId: string) => invoke<ChatMessage[]>('get_chat_messages', { chatId });
 export function sendPrompt(

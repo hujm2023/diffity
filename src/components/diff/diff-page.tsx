@@ -1,4 +1,3 @@
-import { isRemoteRepo } from '../../lib/remote-repo';
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import type { DiffFile } from '@/lib/diff-parser';
@@ -476,7 +475,7 @@ export function DiffPage(props: DiffPageProps) {
     if (ownPr && githubDetails) {
       list.push({ id: 'commit-push', title: `Commit & push to PR #${githubDetails.prNumber}`, group: 'Actions', icon: <PushIcon size="sm" />, run: () => openCommitDialog(githubDetails.prNumber) });
     }
-    return isRemoteRepo(getRepoPath()) ? list.filter((item) => !item.id.startsWith('claude-')) : list;
+    return list;
   }, [hideWhitespace, diff, navigateFile, refParam, ownPr, githubDetails, activeFile]);
 
   useEffect(() => {

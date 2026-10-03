@@ -23,13 +23,19 @@ function stripCode(body: string): string {
   return out.join('\n');
 }
 
-const MENTION = /(^|[^\p{L}\p{N}_\-@./])@claude(?![\p{L}\p{N}_\-@/]|\.[\p{L}\p{N}_-])/iu;
+const MENTION = /(^|[^\p{L}\p{N}_\-@./])@(?:claude|pi|agent)(?![\p{L}\p{N}_\-@/]|\.[\p{L}\p{N}_-])/iu;
+
+/** An explicit @pi / @claude mention selects that agent; @agent uses the project's selection. */
+export function mentionedAgentId(body: string): 'pi' | 'claude' | undefined {
+  const match = /(^|[^\p{L}\p{N}_\-@./])@(claude|pi)(?![\p{L}\p{N}_\-@/]|\.[\p{L}\p{N}_-])/iu.exec(stripCode(body));
+  return match ? match[2].toLowerCase() as 'pi' | 'claude' : undefined;
+}
 
 export function mentionsAgent(body: string): boolean {
   return MENTION.test(stripCode(body));
 }
 
-const MENTION_GLOBAL = /(^|[^\p{L}\p{N}_\-@./])(@claude)(?![\p{L}\p{N}_\-@/]|\.[\p{L}\p{N}_-])/giu;
+const MENTION_GLOBAL = /(^|[^\p{L}\p{N}_\-@./])(@(?:claude|pi|agent))(?![\p{L}\p{N}_\-@/]|\.[\p{L}\p{N}_-])/giu;
 
 export type MentionPart = { text: string; mention: boolean };
 

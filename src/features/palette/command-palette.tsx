@@ -76,7 +76,7 @@ function useGlobalActions(): PaletteAction[] {
     { id: 'report-issue', title: 'Report an issue…', group: 'Actions', keywords: 'bug feedback github idea feature request help', icon: <AlertCircleIcon size="sm" />, run: reportIssue },
     { id: 'check-updates', title: 'Check for updates…', group: 'Actions', keywords: 'update upgrade new version release', icon: <RefreshIcon size="sm" />, run: () => { void checkForUpdatesAndTell(); } },
     { id: 'whats-new', title: 'What’s new in Diffity', group: 'Actions', keywords: 'release notes changelog updates new features version', icon: <SparkleIcon size="sm" />, run: openWhatsNew },
-  ].filter((item) => !isRemoteRepo(nav.repoPath) || !['fetch', 'pull', 'push', 'open-editor', 'reveal', 'comments'].includes(item.id)), [nav, theme, toggleTheme]);
+  ].filter((item) => !isRemoteRepo(nav.repoPath) || !['fetch', 'pull', 'push', 'open-editor', 'reveal'].includes(item.id)), [nav, theme, toggleTheme]);
 }
 
 export function CommandPalette() {

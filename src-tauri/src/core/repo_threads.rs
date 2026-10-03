@@ -339,7 +339,7 @@ fn load_view(repo: &Path, session: &ReviewSession) -> (String, View) {
     }
 }
 
-fn to_repo_thread(
+pub(crate) fn to_repo_thread(
     session: &ReviewSession,
     ref_label: String,
     thread: Thread,

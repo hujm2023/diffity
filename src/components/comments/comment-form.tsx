@@ -1,3 +1,4 @@
+import { agentName, useSelectedAgent } from '../../features/agents/selection';
 import { useState, useRef, useEffect } from 'react';
 import type { SubmitOptions } from './types';
 import { MentionTextarea } from './mention-textarea';
@@ -91,6 +92,8 @@ export function CommentForm(props: CommentFormProps) {
     isReply = false,
     claudeReplies = false,
   } = props;
+  const chosen = useSelectedAgent(getRepoPathOrNull() ?? '');
+  const name = agentName(chosen);
   const [sendToClaude, setSendToClaude] = useState(true);
   const reviewState = useReviewState();
   const storageKey = draftKey ? `${reviewState.sessionId ?? 'none'}:${draftKey}` : undefined;
@@ -226,7 +229,7 @@ export function CommentForm(props: CommentFormProps) {
       </div>
       {review.enabled && claudeReplies && !mentionsAgent(body) && (
         <div className="px-3 pb-2 text-xs text-text-muted" title={`${modKey}Enter submits`}>
-          {sendToClaude ? 'Claude will reply' : 'Saved in Diffity only'}
+          {sendToClaude ? `${name} will reply` : 'Saved in Diffity only'}
           {' · '}
           <button
             type="button"
@@ -239,7 +242,7 @@ export function CommentForm(props: CommentFormProps) {
       )}
       {review.enabled && !(claudeReplies && !mentionsAgent(body)) && (
         <div className="px-3 pb-2 text-xs text-text-muted" title={`${modKey}Enter submits`}>
-          {destinationHint({ reviewMode, prNumber, mentions: mentionsAgent(body), ownPr: review.ownPrNumber })}
+          {destinationHint({ reviewMode, prNumber, mentions: mentionsAgent(body), ownPr: review.ownPrNumber }).replaceAll('Claude', name)}
         </div>
       )}
       <div className="flex items-center justify-end gap-2 px-2 pb-2">

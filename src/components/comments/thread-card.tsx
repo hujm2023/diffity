@@ -1,3 +1,4 @@
+import { agentName, useSelectedAgent } from '../../features/agents/selection';
 import type { CommentThread as CommentThreadType, SubmitOptions } from './types';
 import { isThreadResolved } from './types';
 import { CommentBubble } from './comment-bubble';
@@ -75,7 +76,8 @@ function OriginBadge(props: { thread: CommentThreadType; prMode: boolean; prUrl:
   const base = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium';
 
   if (thread.comments[0]?.author.type === 'agent') {
-    return <span className={cn(base, 'bg-claude/12 text-claude')} title="Written by Claude, kept in Diffity">Claude</span>;
+    const author = thread.comments[0].author.name || 'Agent';
+    return <span className={cn(base, 'bg-claude/12 text-claude')} title={`Written by ${author}, kept in Diffity`}>{author}</span>;
   }
   if (thread.pending) {
     return (
@@ -118,6 +120,9 @@ export function ThreadCard(props: ThreadCardProps) {
     compact = false,
   } = props;
   const review = useReviewState();
+  const chosen = useSelectedAgent(api.getRepoPath());
+  const name = agentName(chosen);
+  const lastAgentName = thread.comments[thread.comments.length - 1]?.author.name || name;
   const replyKey = `reply:${thread.id}`;
   const [showReply, setShowReply] = useViewState(`thread:${thread.id}:reply`, () => hasDraft(review.sessionId, replyKey));
   const claudeThread = thread.comments[0]?.author.type === 'agent';
@@ -204,7 +209,7 @@ export function ThreadCard(props: ThreadCardProps) {
               ...menuItems,
               ...(compact && onResolve && onUnresolve && !resolved ? [{ label: 'Resolve', onSelect: onResolve }] : []),
               ...(compact && onUnresolve && resolved ? [{ label: 'Reopen', onSelect: onUnresolve }] : []),
-              ...(canAskClaude && (compact || !showAskClaude || canPromote) ? [{ label: 'Ask Claude', onSelect: askClaude }] : []),
+              ...(canAskClaude && (compact || !showAskClaude || canPromote) ? [{ label: `Ask ${name}`, onSelect: askClaude }] : []),
               ...(compact && canPromote ? [{ label: 'Add to my review', onSelect: () => void promote() }] : []),
               { label: 'Delete thread', onSelect: requestDelete, danger: true },
             ]}
@@ -243,7 +248,7 @@ export function ThreadCard(props: ThreadCardProps) {
               <SparkleIcon className="w-3 h-3 text-claude" />
             )}
           </span>
-          {activity === 'working' ? 'Claude is working…' : 'Queued for Claude'}
+          {activity === 'working' ? `${name} is working…` : `Queued for ${name}`}
         </div>
       )}
       {onReply && (
@@ -255,7 +260,7 @@ export function ThreadCard(props: ThreadCardProps) {
                 setShowReply(false);
               }}
               onCancel={() => setShowReply(false)}
-              placeholder={lastByClaude && review.enabled ? 'Reply to Claude…' : 'Reply…'}
+              placeholder={lastByClaude && review.enabled ? `Reply to ${lastAgentName}…` : 'Reply…'}
               submitLabel="Reply"
               reviewable={!claudeThread}
               isReply
@@ -270,7 +275,7 @@ export function ThreadCard(props: ThreadCardProps) {
               onClick={() => setShowReply(true)}
               className="flex items-center w-full h-8 px-2.5 rounded-md border border-control-border bg-raised text-left text-[13px] text-text-muted hover:border-focus hover:text-text-secondary transition-colors cursor-text"
             >
-              {lastByClaude && review.enabled ? 'Reply to Claude…' : 'Reply…'}
+              {lastByClaude && review.enabled ? `Reply to ${lastAgentName}…` : 'Reply…'}
             </button>
           </div>
         )

@@ -5,7 +5,7 @@ pub const AGENT_HANDLE: &str = "claude";
 /// True when `body` mentions `@claude` (case-insensitive, whole word) outside fenced code blocks and inline code spans.
 pub fn mentions_agent(body: &str) -> bool {
     let prose = strip_code(body);
-    has_mention(&prose, AGENT_HANDLE)
+    [AGENT_HANDLE, "pi", "agent"].iter().any(|handle| has_mention(&prose, handle))
 }
 
 fn fence_marker(line: &str) -> Option<(char, usize)> {
@@ -126,6 +126,10 @@ mod tests {
     #[test]
     fn detects_plain_mentions() {
         assert!(mentions_agent("@claude can you fix this?"));
+        assert!(mentions_agent("@pi review this"));
+        assert!(mentions_agent("@agent reply"));
+        assert!(!mentions_agent("`@pi`"));
+        assert!(!mentions_agent("contact@pi.example"));
         assert!(mentions_agent("hey @Claude, why?"));
         assert!(mentions_agent("ping @CLAUDE"));
         assert!(mentions_agent("thoughts @claude."));

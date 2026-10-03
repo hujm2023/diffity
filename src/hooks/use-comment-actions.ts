@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { CommentAuthor, CommentSide, CommentThread, SubmitOptions } from '../components/comments/types';
 import * as api from '../lib/api';
 import { enqueueClaude } from '../features/claude/claude-runner';
-import { mentionsAgent } from '../lib/mentions';
+import { mentionsAgent, mentionedAgentId } from '../lib/mentions';
 
 function reportError(error: unknown) {
   toast.error(api.errorMessage(error));
@@ -15,7 +15,7 @@ function mentionFollowUp(thread: CommentThread, askClaude = false) {
   if (!newest || newest.pending || !(newest.mentionsAgent || askClaude)) {
     return;
   }
-  enqueueClaude({ kind: 'thread', threadId: thread.id }, { repoPath: api.getRepoPath(), sessionId: thread.sessionId ?? null });
+  enqueueClaude({ kind: 'thread', threadId: thread.id }, { repoPath: api.getRepoPath(), sessionId: thread.sessionId ?? null, agentId: mentionedAgentId(newest.body) });
 }
 
 export function useCommentActions(sessionId: string | null, enabled: boolean) {
@@ -116,7 +116,7 @@ export function useCommentActions(sessionId: string | null, enabled: boolean) {
     api.editComment(commentId, body).then(() => {
       invalidateThreads();
       if (thread && newMention) {
-        enqueueClaude({ kind: 'thread', threadId: thread.id }, { repoPath: api.getRepoPath(), sessionId: thread.sessionId ?? null });
+        enqueueClaude({ kind: 'thread', threadId: thread.id }, { repoPath: api.getRepoPath(), sessionId: thread.sessionId ?? null, agentId: mentionedAgentId(body) });
       }
     }, reportError);
   }, [enabled, invalidateThreads, queryClient, sessionId]);

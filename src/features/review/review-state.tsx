@@ -1,3 +1,4 @@
+import { agentName, selectedAgentId, reviewOnlyAgent } from '../agents/selection';
 import { createContext, useContext, type ReactNode } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -62,22 +63,26 @@ function successTitle(review: Review, claude: boolean): string {
 }
 
 export function triggerClaude(review: Review, scope: ClaudeScope): string | null {
-  const context = { repoPath: getRepoPath(), sessionId: review.sessionId };
+  const repoPath = getRepoPath();
+  const id = selectedAgentId(repoPath);
+  const name = agentName(id);
+  const context = { repoPath, sessionId: review.sessionId, agentId: id };
   if (scope === 'skip') {
     return null;
   }
-  if (scope === 'all') {
+  if (scope === 'all' && !reviewOnlyAgent(repoPath, id)) {
     enqueueClaude({ kind: 'reviewFeedback', reviewId: review.id }, context);
     return 'Claude is working through it';
   }
-  for (const threadId of review.mentionedThreadIds) {
+  const threadIds = scope === 'all' ? review.threadIds : review.mentionedThreadIds;
+  for (const threadId of threadIds) {
     enqueueClaude({ kind: 'thread', threadId }, context);
   }
-  if (review.mentionedThreadIds.length === 0) {
+  if (threadIds.length === 0) {
     return null;
   }
-  const count = review.mentionedThreadIds.length;
-  return `Claude will answer ${count === 1 ? '1 mention' : `${count} mentions`}`;
+  const count = threadIds.length;
+  return `${name} will answer ${count === 1 ? '1 mention' : `${count} mentions`}`;
 }
 
 export interface PostReviewInput {

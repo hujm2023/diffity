@@ -1,3 +1,5 @@
+import { selectedAgentId, agentName, reviewOnlyAgent, type ReviewAgentId } from '../agents/selection';
+import { getRepoPathOrNull } from '../../lib/api';
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import * as tauri from '../../lib/tauri';
@@ -18,6 +20,7 @@ export type ClaudeAction = Extract<
 
 export interface ClaudeRunContext {
   repoPath: string;
+  agentId?: ReviewAgentId;
   sessionId: string | null;
   ref?: string | null;
   /** GitHub threads whose new Claude reply should be posted back to GitHub when the run ends. */
@@ -72,10 +75,10 @@ export type ThreadActivity = 'idle' | 'queued' | 'working';
 let counter = 0;
 const pumping = new Set<string>();
 
-const AGENT_ID = 'claude';
 
 /** Where Claude may edit files: Claude edits the working tree, so not on an old commit or a range away from HEAD. */
-export function canSendToClaude(diffRef: string | null | undefined): boolean {
+export function canSendToClaude(diffRef: string | null | undefined, current: string | null = getRepoPathOrNull()): boolean {
+  if (current && reviewOnlyAgent(current)) return false;
   if (!diffRef) {
     return true;
   }
@@ -97,6 +100,7 @@ export function modelPurpose(action: ClaudeAction): ModelPurpose {
 }
 
 async function runModelFor(run: ClaudeRun): Promise<RunModel> {
+  if (reviewOnlyAgent(run.context.repoPath, run.context.agentId)) return {};
   if (run.context.model) {
     return run.context.model;
   }
@@ -104,8 +108,9 @@ async function runModelFor(run: ClaudeRun): Promise<RunModel> {
   return readRepoModel(purpose, run.context.repoPath) ?? (await getModelSetting(purpose));
 }
 
-function modeFor(action: ClaudeAction, ref: string | null): AgentMode {
-  if (action.kind === 'review' || (ref && !canSendToClaude(ref))) {
+function modeFor(action: ClaudeAction, ref: string | null, readonly = false): AgentMode {
+  if (readonly) return 'review';
+  if (action.kind === 'review' || (ref && !canSendToClaude(ref, null))) {
     return 'review';
   }
   return 'resolve';
@@ -182,6 +187,11 @@ function initialThreadIds(action: ClaudeAction, sessionId: string | null): strin
 }
 
 export function enqueueClaude(action: ClaudeAction, context: ClaudeRunContext) {
+  context = { ...context, agentId: context.agentId ?? selectedAgentId(context.repoPath) };
+  if (reviewOnlyAgent(context.repoPath, context.agentId) && (action.kind === 'resolve' || action.kind === 'reviewFeedback')) {
+    toast.error('This agent supports read-only review and comment replies');
+    return;
+  }
   const run: ClaudeRun = {
     id: `run-${Date.now()}-${++counter}`,
     action,
@@ -239,13 +249,13 @@ export async function answerClaudePermission(requestId: string, optionId: string
 
 function agentProblem(agent: AgentInfo | undefined): string | null {
   if (!agent) {
-    return 'Claude Code was not found.';
+    return 'The selected agent was not found on the project host.';
   }
   if (!agent.installed) {
-    return agent.note ?? 'Claude Code is not installed. Install the `claude` CLI and try again.';
+    return agent.note ?? `${agent.name} is not installed on the project host.`;
   }
   if (agent.authenticated === false) {
-    return agent.note ?? 'Claude Code is not logged in. Run `claude` in a terminal to log in.';
+    return agent.note ?? `${agent.name} is not logged in on the project host.`;
   }
   return null;
 }
@@ -413,13 +423,16 @@ async function batchOutcome(sessionId: string, threadIds: string[]): Promise<{ t
 }
 
 async function execute(run: ClaudeRun) {
-  const agents = await tauri.listAgents();
-  const agent = agents.find((item) => item.id === AGENT_ID) ?? agents[0];
+  const id = run.context.agentId ?? selectedAgentId(run.context.repoPath);
+  const name = agentName(id);
+  const readonly = reviewOnlyAgent(run.context.repoPath, id);
+  const agents = await tauri.listAgents(false, run.context.repoPath);
+  const agent = agents.find((item) => item.id === id);
   const problem = agentProblem(agent);
   if (problem || !agent) {
-    toast.error('Could not start Claude', {
+    toast.error(`Could not start ${name}`, {
       description: problem ?? undefined,
-      action: { label: 'Claude settings', onClick: () => openSettingsAt('claude') },
+      ...(id === 'claude' && !readonly ? { action: { label: 'Claude settings', onClick: () => openSettingsAt('claude') } } : {}),
     });
     return;
   }
@@ -429,15 +442,15 @@ async function execute(run: ClaudeRun) {
   const chat = await tauri.startChat({
     repoPath: run.context.repoPath,
     agentId: agent.id,
-    mode: modeFor(run.action, ref),
+    mode: modeFor(run.action, ref, readonly),
     sessionId,
     title: chatTitle(run.action),
   });
-  const skipsPrompts = runSkipsPrompts(modeFor(run.action, ref), run.action, await getPermissionSetting());
+  const skipsPrompts = runSkipsPrompts(modeFor(run.action, ref, readonly), run.action, await getPermissionSetting());
   const model = await runModelFor(run);
   patchRun(run.id, { chatId: chat.id, sessionId, startedAt: Date.now(), ref, skipsPrompts, model });
   if (useClaude.getState().runs.find((item) => item.id === run.id)?.stopRequested) {
-    toast.info('Claude was stopped');
+    toast.info(`${name} was stopped`);
     return;
   }
   if (skipsPrompts) {
@@ -497,11 +510,12 @@ async function execute(run: ClaudeRun) {
     queryClient.invalidateQueries({ queryKey: ['reviews'] });
   }
   if (failed) {
-    showFailure('Claude stopped with an error', failed);
+    if (readonly) toast.error(`${name} stopped with an error`, { description: failed.message });
+    else showFailure('Claude stopped with an error', failed);
     return;
   }
   if (cancelled) {
-    toast.info('Claude was stopped');
+    toast.info(`${name} was stopped`);
     return;
   }
   const latest = useClaude.getState().runs.find((item) => item.id === run.id) ?? run;
@@ -511,7 +525,7 @@ async function execute(run: ClaudeRun) {
   const posted = await postRepliesToGitHub(sessionId, run.context.postRepliesToGitHub ?? []);
   const postedNote = posted > 0 ? `Posted ${posted} repl${posted === 1 ? 'y' : 'ies'} to GitHub` : null;
   const description = batch ? [batch.detail, postedNote].filter(Boolean).join(' · ') : postedNote ?? undefined;
-  toast.success(batch?.title ?? finishedMessage(finished, added), {
+  toast.success((batch?.title ?? finishedMessage(finished, added)).replaceAll('Claude', name), {
     description,
     duration: hasTarget ? 12_000 : undefined,
     action: hasTarget ? { label: batch || added > 0 ? 'Show comments' : 'Show thread', onClick: () => openRunResult(finished) } : undefined,
@@ -542,7 +556,7 @@ async function pump(repoPath: string) {
       try {
         await execute(next);
       } catch (error) {
-        showFailure('Could not start Claude', toFailure(error));
+        showFailure(`Could not start ${agentName(next.context.agentId)}`, toFailure(error));
       } finally {
         removeRun(next.id);
       }

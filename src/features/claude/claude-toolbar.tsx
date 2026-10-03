@@ -1,3 +1,4 @@
+import { agentName, useSelectedAgent } from '../agents/selection';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TREE_REF } from '../../lib/types';
 import { openRunResult, runLabel, runViewLabel, stopClaude, useActiveRun, useQueuedCount } from './claude-runner';
@@ -63,7 +64,7 @@ export function ClaudeStatus() {
         title={where ? `Working on ${where}` : undefined}
       >
         <Spinner className="text-claude" />
-        <span className="font-medium truncate @max-3xl/titlebar:hidden">{runLabel(run.action)}</span>
+        <span className="font-medium truncate @max-3xl/titlebar:hidden">{runLabel(run.action).replaceAll('Claude', agentName(run.context.agentId))}</span>
         {run.model && <span className="text-text-muted truncate max-w-[160px] @max-5xl/titlebar:hidden">{runModelLabel(catalog, run.model)}</span>}
         {elsewhere && where && (
           <span className="text-text-secondary truncate max-w-[180px] @max-4xl/titlebar:hidden">on {where}</span>
@@ -101,7 +102,10 @@ export function ClaudeToolbar(props: ClaudeToolbarProps) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setOpen(false), []);
-  const run = useActiveRun(useRepoPath());
+  const repoPath = useRepoPath();
+  const chosen = useSelectedAgent(repoPath);
+  const name = agentName(chosen);
+  const run = useActiveRun(repoPath);
   const { prMode } = useReviewState();
   const requested = useAskClaudeRequest((state) => state.ref);
 
@@ -136,7 +140,7 @@ export function ClaudeToolbar(props: ClaudeToolbarProps) {
         aria-expanded={open}
       >
         <SparkleIcon size="md" />
-        <span className="@max-3xl/titlebar:hidden">Ask Claude</span>
+        <span className="@max-3xl/titlebar:hidden">Ask {name}</span>
         <span className="hidden @min-[1100px]/titlebar:inline -ml-[3px]">to review</span>
       </button>
       <AskClaudePopover open={open} onClose={close} anchorRef={anchorRef} diffRef={reviewRef} sessionId={sessionId} focusedFile={focusedFile} />

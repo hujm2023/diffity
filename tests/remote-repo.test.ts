@@ -41,7 +41,7 @@ describe('SSH API routing', () => {
   it('blocks writes and agents without invoking any backend command', async () => {
     invoke.mockReset();
     const repo = remoteRepoPath('devbox', '/repo');
-    const operations = [api.gitFetch(repo), api.gitPull(repo), api.gitPush(repo), api.gitCommitAll(repo, 'test'), api.gitCheckout(repo, 'main'), api.gitStashPush(repo, 'test'), api.gitStashRestore(repo, 'abc'), api.revertFile(repo, 'a'), api.revertHunk(repo, 'patch'), api.setDiffIgnoreRules(repo, '*.ts'), api.openInEditor(repo, 'a'), api.startChat({ repoPath: repo, agentId: 'claude', mode: 'review', sessionId: 'fixture' })];
+    const operations = [api.gitFetch(repo), api.gitPull(repo), api.gitPush(repo), api.gitCommitAll(repo, 'test'), api.gitCheckout(repo, 'main'), api.gitStashPush(repo, 'test'), api.gitStashRestore(repo, 'abc'), api.revertFile(repo, 'a'), api.revertHunk(repo, 'patch'), api.setDiffIgnoreRules(repo, '*.ts'), api.openInEditor(repo, 'a'), api.startChat({ repoPath: repo, agentId: 'claude', mode: 'resolve', sessionId: 'fixture' })];
     for (const operation of operations) {
       await expect(operation).rejects.toMatchObject({ code: 'read_only' });
     }
@@ -53,5 +53,15 @@ describe('SSH API routing', () => {
     invoke.mockResolvedValue([{ path: '/repo/.worktrees/task-a', branch: 'task-a', headSha: 'abc', bare: false, prunable: false }]);
     const entries = await api.listWorktrees(remoteRepoPath('devbox', '/repo'));
     expect(entries[0].path).toBe('ssh://devbox/repo/.worktrees/task-a');
+  });
+
+  it('detects and starts review agents on the selected project host', async () => {
+    invoke.mockReset();
+    invoke.mockResolvedValue({});
+    const repoPath = remoteRepoPath('agent-host', '/repo');
+    await api.listAgents(true, repoPath);
+    expect(invoke).toHaveBeenLastCalledWith('list_agents', { refresh: true, repoPath });
+    await api.startChat({ repoPath, agentId: 'pi', mode: 'review', sessionId: 'fixture' });
+    expect(invoke).toHaveBeenLastCalledWith('start_chat', { input: { repoPath, agentId: 'pi', mode: 'review', sessionId: 'fixture' } });
   });
 });

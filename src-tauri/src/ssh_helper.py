@@ -7,6 +7,9 @@ import os
 import stat
 import subprocess
 import sys
+import shutil
+from pathlib import Path
+import re
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MAX_TEXT = 2 * 1024 * 1024
@@ -371,9 +374,61 @@ def list_branches(repo):
     return sorted(result, key=lambda entry: (not entry["isCurrent"], entry["isRemote"]))
 
 
+def agent_binary(name, custom=None):
+    if custom:
+        candidate = os.path.expanduser(custom)
+        return candidate if os.path.isfile(candidate) and os.access(candidate, os.X_OK) else None
+    found = shutil.which(name)
+    if found:
+        return found
+    home = Path(os.path.expanduser("~"))
+    candidates = [home / ".local/bin", home / ".npm-global/bin", Path("/opt/homebrew/bin"), Path("/usr/local/bin")]
+    nvm = home / ".nvm/versions/node"
+    if nvm.is_dir():
+        candidates += sorted((item / "bin" for item in nvm.iterdir()), reverse=True)
+    return next((str(folder / name) for folder in candidates if (folder / name).is_file() and os.access(folder / name, os.X_OK)), None)
+
+
+def detect_agents(options):
+    custom = options.get("customPaths") or {}
+    node = agent_binary("node")
+    results = []
+    for name, display in [("claude", "Claude Code"), ("pi", "Pi")]:
+        binary = agent_binary(name, custom.get(name))
+        info = {"id": name, "name": display, "installed": bool(binary and node), "binaryPath": binary,
+                "authenticated": None, "note": None}
+        command, args, env = node, [], []
+        if not binary:
+            info["note"] = "Install %s on this SSH host or set its remote binary path" % display
+        elif not node:
+            info["note"] = "Node.js was not found on this SSH host"
+        elif name == "pi":
+            probe_env = dict(os.environ)
+            probe_env["PATH"] = os.pathsep.join([str(Path(node).parent), str(Path(binary).parent), probe_env.get("PATH", "")])
+            probe = subprocess.run([binary, "--version"], env=probe_env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8)
+            match = re.search(rb"(\d+)\.(\d+)\.(\d+)", probe.stdout[:1024])
+            if probe.returncode != 0 or not match or tuple(map(int, match.groups())) < (0, 99, 2):
+                info.update(installed=False, note="Diffity review needs Pi 0.99.2 or newer with native MCP registration")
+        else:
+            custom_adapter = custom.get(name) and Path(binary).name.startswith("claude-agent-acp")
+            adapter = binary if custom_adapter else agent_binary("claude-agent-acp")
+            npx = agent_binary("npx")
+            if adapter:
+                command = adapter
+            elif npx:
+                command, args = npx, ["-y", "@agentclientprotocol/claude-agent-acp@0.84.0"]
+            else:
+                info.update(installed=False, note="Install claude-agent-acp or Node.js/npx on this SSH host")
+            env = [("PATH", os.pathsep.join([str(Path(node).parent), str(Path(binary).parent), os.environ.get("PATH", "")]))]
+            if not custom_adapter:
+                env.append(("CLAUDE_CODE_EXECUTABLE", binary))
+        results.append({"info": info, "command": command, "args": args, "env": env})
+    return results
+
+
 OPERATIONS = {"open_repo", "repo_remote_url", "git_status", "repo_overview", "list_worktrees",
               "list_tree", "read_file", "read_file_base64", "resolve_ref", "get_diff", "get_file_patch",
-              "get_file_versions", "diff_fingerprint", "list_commits", "list_branches"}
+              "get_file_versions", "diff_fingerprint", "list_commits", "list_branches", "detect_agents"}
 
 
 def handle(request):
@@ -382,6 +437,8 @@ def handle(request):
         raise Failure("read_only", "SSH repositories support read-only operations only")
     repo = root_for(request.get("repo"))
     options = request.get("args") or {}
+    if operation == "detect_agents":
+        return detect_agents(options)
     if operation == "open_repo":
         return repo_info(repo)
     if operation == "repo_remote_url":

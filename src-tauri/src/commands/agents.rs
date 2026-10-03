@@ -12,8 +12,9 @@ use crate::state::AppState;
 pub async fn list_agents(
     state: State<'_, AppState>,
     refresh: Option<bool>,
+    repo_path: Option<String>,
 ) -> Result<Vec<AgentInfo>, AppError> {
-    state.agents.list_agents(refresh.unwrap_or(false)).await
+    state.agents.list_agents_for(repo_path.as_deref(), refresh.unwrap_or(false)).await
 }
 
 #[tauri::command]
@@ -26,7 +27,6 @@ pub async fn agent_models(
 
 #[tauri::command]
 pub async fn start_chat(state: State<'_, AppState>, input: StartChat) -> Result<Chat, AppError> {
-    super::ssh::require_local(&input.repo_path)?;
     state.agents.start_chat(input).await
 }
 

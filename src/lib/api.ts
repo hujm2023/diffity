@@ -200,8 +200,9 @@ export async function fetchRepoInfo(ref?: string): Promise<RepoInfo> {
   const repoPath = getRepoPath();
   const effectiveRef = ref || 'work';
   if (isRemoteRepo(repoPath)) {
-    const repo = await tauri.openRepo(repoPath);
-    return { name: repo.name, branch: repo.branch ?? '', root: repo.path, description: descriptionForRef(effectiveRef), capabilities: { reviews: false, revert: false, staleness: false }, sessionId: null, github: null, editor: null };
+    const [repo, session] = await Promise.all([tauri.openRepo(repoPath), tauri.getSession(repoPath, effectiveRef)]);
+    sessionRefs.set(session.id, effectiveRef);
+    return { name: repo.name, branch: repo.branch ?? '', root: repo.path, description: descriptionForRef(effectiveRef), capabilities: { reviews: true, revert: false, staleness: false }, sessionId: session.id, github: null, editor: null };
   }
   const [repo, resolved, session] = await Promise.all([
     tauri.openRepo(repoPath),
@@ -480,8 +481,9 @@ export async function fetchTreeEntries(dirPath?: string): Promise<{ entries: Tre
 export async function fetchTreeInfo(): Promise<RepoInfo> {
   const repoPath = getRepoPath();
   if (isRemoteRepo(repoPath)) {
-    const repo = await tauri.openRepo(repoPath);
-    return { name: repo.name, branch: repo.branch ?? '', root: repo.path, description: 'Remote repository file browser', capabilities: { reviews: false, revert: false, staleness: false }, sessionId: null, github: null, editor: null };
+    const [repo, session] = await Promise.all([tauri.openRepo(repoPath), tauri.getSession(repoPath, TREE_REF)]);
+    sessionRefs.set(session.id, TREE_REF);
+    return { name: repo.name, branch: repo.branch ?? '', root: repo.path, description: 'Remote repository file browser', capabilities: { reviews: true, revert: false, staleness: false }, sessionId: session.id, github: null, editor: null };
   }
   const [repo, session] = await Promise.all([tauri.openRepo(repoPath), tauri.getSession(repoPath, TREE_REF)]);
   sessionRefs.set(session.id, TREE_REF);
